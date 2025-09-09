@@ -164,10 +164,50 @@ export default function MapLocationPicker({
       };
       
       setRegion(newRegion);
-      setSelectedLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
+      
+      // Get detailed address information
+      try {
+        const geocoded = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+        
+        if (geocoded.length > 0) {
+          const addr = geocoded[0];
+          const locationData: LocationData = {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            address: addr.street || '',
+            city: addr.city || '',
+            postalCode: addr.postalCode || '',
+            state: addr.region || '',
+            country: addr.country || '',
+            formattedAddress: [
+              addr.name,
+              addr.street,
+              addr.city,
+              addr.region,
+              addr.postalCode,
+              addr.country
+            ].filter(Boolean).join(', ')
+          };
+          
+          setSelectedLocation(locationData);
+        } else {
+          setSelectedLocation({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            formattedAddress: 'Current Location'
+          });
+        }
+      } catch (reverseGeoError) {
+        console.error('Reverse geocoding error:', reverseGeoError);
+        setSelectedLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          formattedAddress: 'Current Location'
+        });
+      }
     } catch (error) {
       console.error('Error getting current location:', error);
       Alert.alert('Location Error', 'Failed to get your current location');
