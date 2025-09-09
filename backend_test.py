@@ -41,6 +41,7 @@ class BackendTester:
             'phase2_enhanced_auth': {'passed': 0, 'failed': 0, 'errors': []},
             'phase3_data_protection': {'passed': 0, 'failed': 0, 'errors': []},
             'phase4_mobile_security': {'passed': 0, 'failed': 0, 'errors': []},
+            'smart_push_notifications': {'passed': 0, 'failed': 0, 'errors': []},
         }
         self.session_token = None
         self.test_user_id = None
