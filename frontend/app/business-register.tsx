@@ -518,16 +518,6 @@ export default function BusinessRegisterPage() {
             </View>
           </View>
 
-          {/* Map Modal */}
-          <MapLocationPicker
-            visible={showMapModal}
-            onClose={() => setShowMapModal(false)}
-            onLocationSelected={handleMapLocationSelect}
-            initialLocation={locationCoordinates || undefined}
-            initialAddress={`${formData.address}, ${formData.city}`.trim().replace(/^,\s*/, '')}
-            title="Select Your Business Location"
-          />
-
           {/* Terms */}
           <View style={styles.termsSection}>
             <Text style={styles.termsText}>
@@ -553,6 +543,16 @@ export default function BusinessRegisterPage() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Map Modal - Outside ScrollView */}
+      <MapLocationPicker
+        visible={showMapModal}
+        onClose={() => setShowMapModal(false)}
+        onLocationSelected={handleMapLocationSelect}
+        initialLocation={locationCoordinates || undefined}
+        initialAddress={`${formData.address}, ${formData.city}`.trim().replace(/^,\s*/, '')}
+        title="Select Your Business Location"
+      />
     </SafeAreaView>
   );
 }
