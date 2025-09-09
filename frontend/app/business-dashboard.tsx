@@ -73,7 +73,7 @@ export default function BusinessDashboardPage() {
   const [upgrading, setUpgrading] = useState(false);
 
   useEffect(() => {
-    loadDashboardData();
+    fetchData();
   }, []);
 
   const fetchData = async () => {
