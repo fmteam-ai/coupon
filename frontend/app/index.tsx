@@ -174,6 +174,85 @@ export default function HomePage() {
     }
   };
 
+  const handleShareDeal = async (discountId: string, businessName: string, dealTitle: string) => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to share deals with friends');
+      return;
+    }
+
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      const response = await fetch(`${EXPO_BACKEND_URL}/api/social/share-deal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          discount_id: discountId,
+          share_type: 'link',
+          share_platform: 'mobile_app'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        Alert.alert(
+          'Deal Shared! 🎉',
+          `You earned ${result.points_earned} points! Share this deal with friends to earn bonus points when they use it.`,
+          [
+            { text: 'Copy Link', onPress: () => copyShareLink(result.share_link) },
+            { text: 'Done' }
+          ]
+        );
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to share deal');
+    }
+  };
+
+  const copyShareLink = async (shareLink: string) => {
+    // For now, just show the link in an alert since React Native doesn't have built-in clipboard
+    Alert.alert('Share Link', shareLink, [
+      { text: 'OK' }
+    ]);
+  };
+
+  const handleViewSocialProof = async (discountId: string) => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to see social activity');
+      return;
+    }
+
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      const response = await fetch(`${EXPO_BACKEND_URL}/api/social/deal-popularity/${discountId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const popularity = await response.json();
+        const friendsUsed = popularity.friends_who_used;
+        const recentUsage = popularity.recent_usage_count;
+        
+        let message = `${recentUsage} people used this deal recently`;
+        if (friendsUsed.length > 0) {
+          const friendNames = friendsUsed.slice(0, 3).map((f: any) => f.name).join(', ');
+          message += `\n\nYour friends who used this:\n${friendNames}`;
+          if (friendsUsed.length > 3) {
+            message += ` and ${friendsUsed.length - 3} others`;
+          }
+        }
+
+        Alert.alert('Social Proof 👥', message);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load social proof');
+    }
+  };
+
   const handleViewModeToggle = () => {
     if (viewMode === 'list') {
       router.push('/map');
