@@ -77,6 +77,8 @@ export default function BusinessAuthRegisterPage() {
   const [step, setStep] = useState(1); // Multi-step form
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string>('not_set');
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
 
   const updateFormData = (field: keyof BusinessFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
