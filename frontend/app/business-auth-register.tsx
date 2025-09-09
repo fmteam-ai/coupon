@@ -16,6 +16,9 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import { CountrySelector } from '../components/CountryPicker';
+import MapLocationPicker from '../components/MapLocationPicker';
+import { Country } from '../utils/countries';
 
 const EXPO_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
