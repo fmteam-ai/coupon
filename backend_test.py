@@ -998,13 +998,14 @@ async def main():
     """Run all backend tests"""
     print("🚀 Starting Comprehensive Backend Testing...")
     print(f"Testing backend at: {API_BASE}")
-    print("\n🎯 FOCUS: Testing TOP 5 MOST IMPACTFUL FEATURES + NEW AI DYNAMIC PRICING")
+    print("\n🎯 FOCUS: Testing TOP 5 MOST IMPACTFUL FEATURES + NEW AI SYSTEMS")
     print("1. AI Personal Deal Recommendations")
     print("2. Gamified Rewards System")
     print("3. Integrated Cashback System")
     print("4. Geofencing System")
     print("5. Enhanced Business Analytics Dashboard")
     print("6. 🆕 AI Dynamic Pricing & Demand Prediction System")
+    print("7. 🆕 Computer Vision & AR Features System")
     
     tester = BackendTester()
     
