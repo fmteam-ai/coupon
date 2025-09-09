@@ -39,6 +39,14 @@ interface BusinessData {
   country: string;
   language: string;
   logo?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+interface LocationCoordinates {
+  latitude: number;
+  longitude: number;
+  address?: string;
 }
 
 export default function BusinessRegisterPage() {
