@@ -369,13 +369,11 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Subscription Management System"
-    - "Enhanced Business Registration with Trial"
-    - "Enhanced Discount System with Usage Limits"
-    - "Verification System"
-    - "Business Analytics System"
-    - "Admin Platform Management"
-    - "Stripe Integration"
+    - "AI Personal Deal Recommendations"
+    - "Gamified Rewards System"
+    - "Integrated Cashback System"
+    - "Geofencing System"
+    - "Smart Business Analytics Dashboard"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
