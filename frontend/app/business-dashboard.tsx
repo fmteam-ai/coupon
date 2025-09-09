@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -17,36 +18,59 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const EXPO_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
-interface SubscriptionStatus {
-  status: string;
-  trial_end?: string;
-  trial_active?: boolean;
-  days_remaining?: number;
-  current_period_end?: string;
+interface SubscriptionPlan {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  features: string[];
+  max_coupons: number;
+  ai_recommendations: boolean;
+  geofencing: boolean;
+  advanced_analytics: boolean;
 }
 
-interface Analytics {
+interface SubscriptionStatus {
+  subscription_id: string;
+  business_id: string;
   business_name: string;
-  total_discounts: number;
-  active_discounts: number;
-  total_redemptions: number;
-  recent_redemptions: Array<{
-    discount_title: string;
-    user_name: string;
-    used_at: string;
-    verification_status: string;
-  }>;
-  monthly_trends: Array<{
-    month: string;
-    redemptions: number;
-  }>;
+  plan: SubscriptionPlan;
+  status: string;
+  trial_active?: boolean;
+  trial_end?: string;
+  days_remaining?: number;
+  trial_expired?: boolean;
+  current_period_end?: string;
+  days_until_renewal?: number;
+  stripe_subscription_id?: string;
+}
+
+interface UsageAnalytics {
+  business_name: string;
+  current_plan: SubscriptionPlan;
+  monthly_cost: number;
+  analytics_period: string;
+  metrics: {
+    total_discounts: number;
+    active_discounts: number;
+    recent_customer_engagement: number;
+    estimated_customer_value: number;
+    estimated_roi: number;
+    business_rating: number;
+    total_reviews: number;
+  };
+  recommendations: string[];
 }
 
 export default function BusinessDashboardPage() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [usageAnalytics, setUsageAnalytics] = useState<UsageAnalytics | null>(null);
+  const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
+  const [upgrading, setUpgrading] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
