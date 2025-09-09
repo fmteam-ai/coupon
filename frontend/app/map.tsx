@@ -383,6 +383,31 @@ export default function MapPage() {
                           <Text style={styles.expiryText}>
                             Expires: {new Date(item.discount.expires_at).toLocaleDateString()}
                           </Text>
+                          
+                          {/* Social Actions */}
+                          <View style={styles.socialActions}>
+                            <TouchableOpacity 
+                              style={styles.socialButton}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleShareDeal(item.discount.id, item.business.name, item.discount.title);
+                              }}
+                            >
+                              <Ionicons name="share-outline" size={14} color="#007AFF" />
+                              <Text style={styles.socialButtonText}>Share</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                              style={styles.socialButton}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleViewSocialProof(item.discount.id);
+                              }}
+                            >
+                              <Ionicons name="people-outline" size={14} color="#34C759" />
+                              <Text style={styles.socialButtonText}>Who Used</Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
                       </View>
                     </TouchableOpacity>
