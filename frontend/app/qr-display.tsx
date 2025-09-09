@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import QRCode from 'react-native-qrcode-svg'; // We'll need to install this
+import QRCode from 'react-native-qrcode-svg';
 
 const { width } = Dimensions.get('window');
 
