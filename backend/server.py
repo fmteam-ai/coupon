@@ -58,6 +58,18 @@ def get_llm_client():
 # Create the main app without a prefix
 app = FastAPI()
 
+# Initialize security middleware
+security_config = {
+    "rate_limits": {
+        "default": {"requests": 100, "window": 60},
+        "auth": {"requests": 10, "window": 60},
+        "upload": {"requests": 20, "window": 60},
+        "search": {"requests": 50, "window": 60},
+        "pricing": {"requests": 200, "window": 60},
+    }
+}
+security_middleware = init_security_middleware(app, security_config)
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
