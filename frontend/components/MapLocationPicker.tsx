@@ -55,7 +55,21 @@ export default function MapLocationPicker({
   const [loading, setLoading] = useState(false);
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
 
+  // Dynamically import MapView for native platforms only
+  const [MapComponent, setMapComponent] = useState<any>(null);
+  const [MarkerComponent, setMarkerComponent] = useState<any>(null);
+
   useEffect(() => {
+    if (visible && Platform.OS !== 'web') {
+      // Dynamically import maps only when needed and on native platforms
+      import('react-native-maps').then((Maps) => {
+        setMapComponent(() => Maps.default);
+        setMarkerComponent(() => Maps.Marker);
+      }).catch((error) => {
+        console.log('react-native-maps not available:', error);
+      });
+    }
+    
     if (visible) {
       requestLocationPermission();
     }
