@@ -79,6 +79,11 @@ export default function BusinessRegisterPage() {
     rtl: false,
   });
 
+  // Map location picker states
+  const [showMapForAddress, setShowMapForAddress] = useState(false);
+  const [locationCoordinates, setLocationCoordinates] = useState<LocationCoordinates | null>(null);
+  const [showMapModal, setShowMapModal] = useState(false);
+
   const categories = [
     'Restaurant', 'Retail', 'Health & Beauty', 'Services', 
     'Entertainment', 'Travel', 'Technology', 'Fitness', 
