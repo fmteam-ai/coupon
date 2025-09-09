@@ -4117,6 +4117,224 @@ async def get_receipt_analytics(user: User = Depends(require_auth)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Receipt analytics error: {str(e)}")
 
+# ============================================================================
+# SECURITY SYSTEM ENDPOINTS
+# ============================================================================
+
+@api_router.get("/security/status")
+async def get_security_status():
+    """Get security system status and configuration"""
+    try:
+        return {
+            "success": True,
+            "security_features": {
+                "rate_limiting": True,
+                "input_validation": True,
+                "suspicious_pattern_detection": True,
+                "request_size_limits": True,
+                "security_headers": True,
+                "security_logging": True
+            },
+            "rate_limits": {
+                "default": "100 requests/minute",
+                "auth": "10 requests/minute", 
+                "upload": "20 requests/minute",
+                "search": "50 requests/minute",
+                "pricing": "200 requests/minute"
+            },
+            "security_headers": list(security_headers.get_security_headers().keys()),
+            "validation_features": [
+                "Email format validation",
+                "Phone number validation", 
+                "GPS coordinate validation",
+                "Image data validation",
+                "Text sanitization",
+                "Business data validation"
+            ],
+            "threat_detection": [
+                "SQL injection patterns",
+                "XSS attack patterns",
+                "Path traversal attempts",
+                "Command injection attempts", 
+                "NoSQL injection patterns"
+            ],
+            "active_protections": {
+                "request_size_limit": "10MB for images, 1MB for regular requests",
+                "ip_blocking": "Temporary blocking after rate limit violations",
+                "pattern_blocking": "Automatic blocking of suspicious patterns",
+                "header_protection": "Security headers on all responses"
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Security status error: {str(e)}")
+
+@api_router.get("/security/headers")
+async def get_security_headers_info():
+    """Get information about security headers"""
+    try:
+        headers_info = security_headers.get_security_headers()
+        
+        return {
+            "success": True,
+            "security_headers": {
+                header: {
+                    "value": value,
+                    "description": get_header_description(header)
+                }
+                for header, value in headers_info.items()
+            },
+            "cors_policy": {
+                "description": "CORS headers configured for API access",
+                "allow_origin": "*",  # Should be more restrictive in production
+                "allow_methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "allow_headers": "Content-Type, Authorization, X-Requested-With"
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Security headers error: {str(e)}")
+
+def get_header_description(header: str) -> str:
+    """Get description for security headers"""
+    descriptions = {
+        "X-Content-Type-Options": "Prevents MIME type sniffing attacks",
+        "X-Frame-Options": "Prevents clickjacking attacks by denying iframe embedding",
+        "X-XSS-Protection": "Enables browser XSS filtering and blocking",
+        "Strict-Transport-Security": "Enforces HTTPS connections",
+        "Content-Security-Policy": "Controls resource loading to prevent XSS",
+        "Referrer-Policy": "Controls referrer information sent with requests",
+        "Permissions-Policy": "Controls browser feature access permissions"
+    }
+    return descriptions.get(header, "Security header configuration")
+
+@api_router.post("/security/validate-input")
+async def validate_input_data(request: Request):
+    """Validate input data for security issues"""
+    try:
+        data = await request.json()
+        
+        validation_results = {
+            "success": True,
+            "validations": {},
+            "warnings": [],
+            "errors": []
+        }
+        
+        # Validate different types of data
+        if "email" in data:
+            email_valid = security_validator.validate_email(data["email"])
+            validation_results["validations"]["email"] = {
+                "valid": email_valid,
+                "value": data["email"]
+            }
+            if not email_valid:
+                validation_results["errors"].append("Invalid email format")
+        
+        if "phone" in data:
+            phone_valid = security_validator.validate_phone(data["phone"])
+            validation_results["validations"]["phone"] = {
+                "valid": phone_valid,
+                "value": data["phone"]
+            }
+            if not phone_valid:
+                validation_results["errors"].append("Invalid phone number format")
+        
+        if "latitude" in data and "longitude" in data:
+            coords_valid = security_validator.validate_coordinates(
+                float(data["latitude"]), float(data["longitude"])
+            )
+            validation_results["validations"]["coordinates"] = {
+                "valid": coords_valid,
+                "latitude": data["latitude"],
+                "longitude": data["longitude"]
+            }
+            if not coords_valid:
+                validation_results["errors"].append("Invalid GPS coordinates")
+        
+        if "image_data" in data:
+            image_valid = security_validator.validate_image_data(data["image_data"])
+            validation_results["validations"]["image_data"] = {
+                "valid": image_valid,
+                "size_mb": len(data["image_data"]) / (1024 * 1024) if image_valid else 0
+            }
+            if not image_valid:
+                validation_results["errors"].append("Invalid or oversized image data")
+        
+        # Check for suspicious patterns
+        for key, value in data.items():
+            if isinstance(value, str) and security_validator.check_suspicious_content(value):
+                validation_results["warnings"].append(f"Suspicious pattern detected in {key}")
+        
+        validation_results["success"] = len(validation_results["errors"]) == 0
+        
+        return validation_results
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Input validation error: {str(e)}")
+
+@api_router.get("/security/rate-limit-status")  
+async def get_rate_limit_status(request: Request):
+    """Get current rate limit status for the requesting IP"""
+    try:
+        client_ip = rate_limiter.get_client_ip(request)
+        
+        # Get current usage for different categories
+        rate_status = {
+            "success": True,
+            "client_ip": client_ip,
+            "is_blocked": rate_limiter.is_blocked(request),
+            "rate_limits": {}
+        }
+        
+        for category, config in rate_limiter.rate_limits.items():
+            rate_key = f"{client_ip}:{category}"
+            current_requests = len(rate_limiter.requests.get(rate_key, []))
+            
+            rate_status["rate_limits"][category] = {
+                "limit": config["requests"],  
+                "window": config["window"],
+                "current_usage": current_requests,
+                "remaining": max(0, config["requests"] - current_requests),
+                "percentage_used": round((current_requests / config["requests"]) * 100, 1)
+            }
+        
+        return rate_status
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Rate limit status error: {str(e)}")
+
+# Apply security checks to sensitive endpoints
+@api_router.post("/security/test-protection")
+@apply_security_checks
+async def test_security_protection(request: Request):
+    """Test endpoint to verify security protections are working"""
+    try:
+        client_ip = rate_limiter.get_client_ip(request)
+        
+        # Log the security test
+        security_logger.log_security_event(
+            "security_test", 
+            request, 
+            {"test_type": "protection_verification", "client_ip": client_ip}
+        )
+        
+        return {
+            "success": True,
+            "message": "Security protections are active",
+            "client_ip": client_ip,
+            "timestamp": datetime.utcnow().isoformat(),
+            "security_checks_passed": [
+                "Rate limiting check",
+                "IP blocking check", 
+                "Request size validation",
+                "Suspicious pattern detection"
+            ]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Security test error: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
