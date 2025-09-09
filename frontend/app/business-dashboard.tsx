@@ -198,7 +198,7 @@ export default function BusinessDashboardPage() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadDashboardData();
+    fetchData();
   };
 
   const handleUpgradeSubscription = () => {
