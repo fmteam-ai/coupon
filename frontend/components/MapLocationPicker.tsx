@@ -289,8 +289,11 @@ export default function MapLocationPicker({
         {/* Instructions */}
         <View style={styles.instructionsContainer}>
           <Text style={styles.instructionsText}>
-            📍 Tap on the map to select your exact business location
+            📍 {geocodingAddress ? 'Finding address location...' : 'Tap on the map to select your exact business location'}
           </Text>
+          {geocodingAddress && (
+            <ActivityIndicator size="small" color="#007AFF" style={{ marginTop: 8 }} />
+          )}
         </View>
 
         {/* Map */}
