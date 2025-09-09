@@ -442,8 +442,16 @@ export default function BusinessAuthRegisterPage() {
           )}
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.mapButton}
+          onPress={() => setShowMapPicker(true)}
+        >
+          <Ionicons name="map" size={20} color="#007AFF" />
+          <Text style={styles.mapButtonText}>Select on Map</Text>
+        </TouchableOpacity>
+
         <Text style={styles.locationNote}>
-          💡 In the full version, you'll be able to drag a pin on a map to set your exact location
+          📍 Use "Set Current Location" for quick setup or "Select on Map" for precise positioning
         </Text>
       </View>
 
