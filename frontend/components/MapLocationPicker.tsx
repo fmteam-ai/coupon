@@ -46,6 +46,7 @@ export default function MapLocationPicker({
   onClose,
   onLocationSelected,
   initialLocation,
+  initialAddress,
   title = "Select Business Location"
 }: MapLocationPickerProps) {
   const [region, setRegion] = useState<Region>({
@@ -60,12 +61,17 @@ export default function MapLocationPicker({
   );
   const [loading, setLoading] = useState(false);
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
+  const [geocodingAddress, setGeocodingAddress] = useState(false);
 
   useEffect(() => {
     if (visible) {
       requestLocationPermission();
+      // If we have an initial address, geocode it
+      if (initialAddress && !initialLocation) {
+        geocodeAddress(initialAddress);
+      }
     }
-  }, [visible]);
+  }, [visible, initialAddress]);
 
   const requestLocationPermission = async () => {
     try {
