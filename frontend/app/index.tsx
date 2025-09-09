@@ -738,6 +738,38 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#007AFF',
   },
+  logoContainer: {
+    alignItems: 'center',
+  },
+  logoIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f0f8ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  logoSymbol: {
+    fontSize: 24,
+  },
+  appName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    letterSpacing: 0.5,
+  },
+  tagline: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+    marginTop: 2,
+  },
   userSection: {
     flexDirection: 'row',
     alignItems: 'center',
