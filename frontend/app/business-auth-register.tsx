@@ -454,10 +454,22 @@ export default function BusinessAuthRegisterPage() {
 
         <TouchableOpacity
           style={styles.mapButton}
-          onPress={() => setShowMapPicker(true)}
+          onPress={() => {
+            if (Platform.OS === 'web') {
+              Alert.alert(
+                'Map Feature',
+                'Interactive map location selection is available on mobile devices. You can use "Set Current Location" or manually enter coordinates.',
+                [{ text: 'OK' }]
+              );
+            } else {
+              setShowMapPicker(true);
+            }
+          }}
         >
           <Ionicons name="map" size={20} color="#007AFF" />
-          <Text style={styles.mapButtonText}>Select on Map</Text>
+          <Text style={styles.mapButtonText}>
+            {Platform.OS === 'web' ? 'Map (Mobile Only)' : 'Select on Map'}
+          </Text>
         </TouchableOpacity>
 
         <Text style={styles.locationNote}>
