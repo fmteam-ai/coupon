@@ -304,6 +304,16 @@ export default function BusinessAuthRegisterPage() {
       </View>
 
       <View style={styles.inputGroup}>
+        <Text style={styles.label}>Country *</Text>
+        <CountrySelector
+          selectedCountryCode={formData.country}
+          onCountrySelect={handleCountrySelect}
+          placeholder="Select Country"
+          style={styles.input}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
         <Text style={styles.label}>Category *</Text>
         <TouchableOpacity
           style={styles.categoryButton}
