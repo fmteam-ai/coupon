@@ -151,28 +151,7 @@ export default function HomePage() {
     }
   };
 
-  const handleLogin = () => {
-    const redirectUrl = encodeURIComponent(window.location.origin + '/profile');
-    const authUrl = `https://auth.emergentagent.com/?redirect=${redirectUrl}`;
-    window.open(authUrl, '_self');
-  };
 
-  const handleLogout = async () => {
-    try {
-      const token = await AsyncStorage.getItem('session_token');
-      await fetch(`${EXPO_BACKEND_URL}/api/auth/logout`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      await AsyncStorage.removeItem('session_token');
-      setUser(null);
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
 
   const handleShareDeal = async (discountId: string, businessName: string, dealTitle: string) => {
     if (!user) {
