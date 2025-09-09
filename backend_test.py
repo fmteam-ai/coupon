@@ -587,10 +587,15 @@ class BackendTester:
         try:
             fake_discount_id = str(uuid.uuid4())
             response = await self.client.post(f"{API_BASE}/pricing/dynamic-price/{fake_discount_id}/anonymous")
-            # This should return an error about discount not found, not auth error
-            if response.status_code in [404, 500]:  # Discount not found or pricing error
-                self.log_result('dynamic_pricing', 'Anonymous dynamic pricing endpoint', True)
-                print("   ✓ Anonymous pricing endpoint accessible without authentication")
+            # This should return 200 with error message about discount not found
+            if response.status_code == 200:
+                result = response.json()
+                if 'error' in result and 'Discount not found' in result['error']:
+                    self.log_result('dynamic_pricing', 'Anonymous dynamic pricing endpoint', True)
+                    print("   ✓ Anonymous pricing endpoint accessible without authentication")
+                else:
+                    self.log_result('dynamic_pricing', 'Anonymous dynamic pricing endpoint', False,
+                                  f"Unexpected response structure: {result}")
             elif response.status_code == 401:
                 self.log_result('dynamic_pricing', 'Anonymous dynamic pricing endpoint', False,
                               "Anonymous endpoint should not require authentication")
