@@ -827,6 +827,13 @@ async def main():
         await tester.test_geofencing_system()
         await tester.test_business_analytics()
         
+        # Run NEW DYNAMIC PRICING SYSTEM tests
+        print("\n" + "="*60)
+        print("🤖💰 TESTING AI DYNAMIC PRICING & DEMAND PREDICTION SYSTEM")
+        print("="*60)
+        
+        await tester.test_dynamic_pricing_system()
+        
         # Print summary
         success = tester.print_summary()
         
