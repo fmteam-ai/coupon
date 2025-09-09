@@ -587,14 +587,29 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
   },
+  // Enhanced address breakdown styles
+  addressBreakdown: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e1e1e1',
+  },
+  addressBreakdownTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
+  },
   // Address components styles
   addressComponents: {
     marginTop: 8,
     gap: 4,
   },
   addressComponent: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#666',
-    lineHeight: 16,
+    lineHeight: 14,
   },
 });
