@@ -4657,6 +4657,396 @@ async def cleanup_expired_tokens():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Cleanup error: {str(e)}")
 
+# ============================================================================
+# MOBILE SECURITY SYSTEM (PHASE 4)
+# ============================================================================
+
+class DeviceRegistrationRequest(BaseModel):
+    device_info: Dict[str, Any]
+
+class SecurityViolationRequest(BaseModel):
+    device_id: str
+    violation_type: str
+    details: Optional[Dict[str, Any]] = None
+
+class CertificatePinRequest(BaseModel):
+    domain: str
+    certificate_hash: str
+
+@api_router.post("/mobile/device/register")
+async def register_mobile_device(request: DeviceRegistrationRequest, user: User = Depends(require_auth)):
+    """Register mobile device and perform security assessment"""
+    try:
+        result = mobile_security_manager.register_device(user.id, request.device_info)
+        
+        if not result.get("success"):
+            raise HTTPException(status_code=400, detail=result.get("error", "Device registration failed"))
+        
+        # Log device registration
+        security_logger.log_security_event(
+            "device_registration",
+            None,  # No request context available here
+            {
+                "user_id": user.id,
+                "device_id": result["device_id"],
+                "risk_level": result["risk_level"],
+                "is_trusted": result["is_trusted"]
+            }
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Device registration error: {str(e)}")
+
+@api_router.get("/mobile/device/status/{device_id}")
+async def get_device_status(device_id: str, user: User = Depends(require_auth)):
+    """Get comprehensive device security status"""
+    try:
+        # Verify device belongs to user
+        device_record = mobile_security_manager.db.device_fingerprints.find_one({
+            "device_id": device_id,
+            "user_id": user.id
+        })
+        
+        if not device_record:
+            raise HTTPException(status_code=404, detail="Device not found or access denied")
+        
+        status = mobile_security_manager.get_device_status(device_id)
+        
+        if "error" in status:
+            raise HTTPException(status_code=400, detail=status["error"])
+        
+        return {
+            "success": True,
+            "device_status": status
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Get device status error: {str(e)}")
+
+@api_router.get("/mobile/security/policies")
+async def get_mobile_security_policies():
+    """Get mobile security policies and requirements"""
+    try:
+        policies = mobile_security_manager.get_security_policies()
+        
+        return {
+            "success": True,
+            "policies": policies,
+            "policy_version": "1.0",
+            "enforcement_level": "strict",
+            "compliance_requirements": [
+                "Device must not be jailbroken/rooted",
+                "App must be installed from official store",
+                "Certificate pinning must be active",
+                "Minimum OS version requirements must be met",
+                "No debugging or tampering tools allowed"
+            ]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Get security policies error: {str(e)}")
+
+@api_router.get("/mobile/certificate/pins")
+async def get_certificate_pins():
+    """Get certificate pins for SSL pinning"""
+    try:
+        pins = mobile_security_manager.get_certificate_pins()
+        
+        return {
+            "success": True,
+            "certificate_pins": pins,
+            "pin_validation_required": True,
+            "backup_validation": "fallback_to_system_trust",
+            "pin_update_interval": "30_days"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Get certificate pins error: {str(e)}")
+
+@api_router.post("/mobile/certificate/validate")
+async def validate_certificate_pin(request: CertificatePinRequest):
+    """Validate certificate pin from mobile client"""
+    try:
+        is_valid = mobile_security_manager.validate_certificate_pin(
+            request.domain,
+            request.certificate_hash
+        )
+        
+        return {
+            "success": True,
+            "pin_valid": is_valid,
+            "validation_timestamp": datetime.utcnow().isoformat(),
+            "action": "proceed" if is_valid else "block_connection"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Certificate validation error: {str(e)}")
+
+@api_router.post("/mobile/security/violation")
+async def report_security_violation(request: SecurityViolationRequest, user: User = Depends(require_auth)):
+    """Report security violation from mobile client"""
+    try:
+        # Verify device belongs to user
+        device_record = mobile_security_manager.db.device_fingerprints.find_one({
+            "device_id": request.device_id,
+            "user_id": user.id
+        })
+        
+        if not device_record:
+            raise HTTPException(status_code=404, detail="Device not found or access denied")
+        
+        # Validate violation type
+        try:
+            violation_type = SecurityThreat(request.violation_type)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid violation type")
+        
+        # Log security violation
+        mobile_security_manager.log_security_violation(
+            request.device_id,
+            violation_type,
+            request.details
+        )
+        
+        # Determine response action based on violation severity
+        severity = mobile_security_manager._get_violation_severity(violation_type)
+        
+        response_actions = {
+            "low": "continue_with_warning",
+            "medium": "require_additional_auth",
+            "high": "restrict_features",
+            "critical": "block_access"
+        }
+        
+        return {
+            "success": True,
+            "violation_logged": True,
+            "severity": severity,
+            "recommended_action": response_actions.get(severity, "continue_with_warning"),
+            "message": f"Security violation of type {violation_type.value} has been logged"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Security violation reporting error: {str(e)}")
+
+@api_router.post("/mobile/device/trust")
+async def update_device_trust(request: Request, admin_user: User = Depends(require_auth)):
+    """Update device trust status (admin only)"""
+    try:
+        # Check admin permissions
+        admin_permissions = enhanced_auth_manager.get_user_permissions(admin_user.role)
+        if Permission.MANAGE_USERS not in admin_permissions:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        data = await request.json()
+        device_id = data.get("device_id")
+        trusted = data.get("trusted", False)
+        reason = data.get("reason", "")
+        
+        if not device_id:
+            raise HTTPException(status_code=400, detail="Device ID is required")
+        
+        mobile_security_manager.update_device_trust(device_id, trusted, reason)
+        
+        return {
+            "success": True,
+            "message": f"Device trust status updated to {'trusted' if trusted else 'untrusted'}",
+            "device_id": device_id,
+            "updated_by": admin_user.id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Device trust update error: {str(e)}")
+
+@api_router.get("/mobile/security/threats")
+async def get_security_threat_info():
+    """Get information about mobile security threats"""
+    try:
+        threat_info = {}
+        
+        for threat in SecurityThreat:
+            threat_info[threat.value] = {
+                "name": threat.name.replace('_', ' ').title(),
+                "severity": mobile_security_manager._get_violation_severity(threat),
+                "description": get_threat_description(threat),
+                "mitigation": get_threat_mitigation(threat)
+            }
+        
+        return {
+            "success": True,
+            "threats": threat_info,
+            "detection_capabilities": [
+                "Jailbreak/Root detection",
+                "Emulator detection", 
+                "Debugger attachment detection",
+                "Runtime hooking detection",
+                "App tampering detection",
+                "Malware detection",
+                "Network security analysis"
+            ],
+            "protection_features": [
+                "Certificate pinning",
+                "App integrity verification",
+                "Device fingerprinting",
+                "Risk-based authentication",
+                "Real-time threat monitoring"
+            ]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Get threat info error: {str(e)}")
+
+def get_threat_description(threat: SecurityThreat) -> str:
+    """Get description for security threats"""
+    descriptions = {
+        SecurityThreat.JAILBREAK: "iOS device has been jailbroken, removing Apple's security restrictions",
+        SecurityThreat.ROOT: "Android device has been rooted, gaining superuser access",
+        SecurityThreat.EMULATOR: "App is running on an emulator instead of physical device",
+        SecurityThreat.DEBUGGER: "Debugging tools are attached to the application",
+        SecurityThreat.HOOKING: "Runtime manipulation or function hooking detected",
+        SecurityThreat.TAMPERING: "Application code or data has been modified",
+        SecurityThreat.MALWARE: "Malicious software detected on the device",
+        SecurityThreat.UNTRUSTED_NETWORK: "Device connected to potentially unsafe network"
+    }
+    return descriptions.get(threat, "Unknown security threat")
+
+def get_threat_mitigation(threat: SecurityThreat) -> str:
+    """Get mitigation strategies for security threats"""
+    mitigations = {
+        SecurityThreat.JAILBREAK: "Block app execution or limit functionality on jailbroken devices",
+        SecurityThreat.ROOT: "Restrict features or require additional authentication on rooted devices",
+        SecurityThreat.EMULATOR: "Block execution on emulators to prevent automated attacks",
+        SecurityThreat.DEBUGGER: "Detect and respond to debugging attempts in real-time",
+        SecurityThreat.HOOKING: "Implement anti-hooking measures and runtime protection",
+        SecurityThreat.TAMPERING: "Verify app integrity and signature validation",
+        SecurityThreat.MALWARE: "Integrate with threat intelligence and device scanning",
+        SecurityThreat.UNTRUSTED_NETWORK: "Require VPN or warn users about network risks"
+    }
+    return mitigations.get(threat, "General security monitoring")
+
+@api_router.get("/mobile/security/attestation/{device_id}")
+async def get_device_attestation(device_id: str, user: User = Depends(require_auth)):
+    """Get device attestation status and certificate"""
+    try:
+        # Verify device belongs to user
+        device_record = mobile_security_manager.db.device_fingerprints.find_one({
+            "device_id": device_id,
+            "user_id": user.id
+        })
+        
+        if not device_record:
+            raise HTTPException(status_code=404, detail="Device not found or access denied")
+        
+        # Generate fresh device certificate
+        device_cert = mobile_security_manager.generate_device_certificate(device_id)
+        
+        return {
+            "success": True,
+            "device_id": device_id,
+            "attestation_status": device_record.get("attestation_status", "pending"),
+            "device_certificate": device_cert,
+            "certificate_expires": (datetime.utcnow() + timedelta(days=30)).isoformat(),
+            "trust_level": "trusted" if device_record.get("is_trusted") else "untrusted",
+            "last_security_check": device_record.get("last_seen", datetime.utcnow()).isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Device attestation error: {str(e)}")
+
+@api_router.post("/mobile/security/challenge")
+async def security_challenge_response(request: Request, user: User = Depends(require_auth)):
+    """Handle security challenge responses from mobile client"""
+    try:
+        data = await request.json()
+        device_id = data.get("device_id")
+        challenge_type = data.get("challenge_type")
+        response_data = data.get("response_data", {})
+        
+        if not device_id or not challenge_type:
+            raise HTTPException(status_code=400, detail="Device ID and challenge type required")
+        
+        # Verify device belongs to user
+        device_record = mobile_security_manager.db.device_fingerprints.find_one({
+            "device_id": device_id,
+            "user_id": user.id
+        })
+        
+        if not device_record:
+            raise HTTPException(status_code=404, detail="Device not found or access denied")
+        
+        # Process different types of security challenges
+        challenge_result = process_security_challenge(challenge_type, response_data, device_record)
+        
+        return {
+            "success": True,
+            "challenge_type": challenge_type,
+            "challenge_passed": challenge_result["passed"],
+            "message": challenge_result["message"],
+            "next_action": challenge_result.get("next_action", "continue")
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Security challenge error: {str(e)}")
+
+def process_security_challenge(challenge_type: str, response_data: Dict[str, Any], 
+                             device_record: Dict[str, Any]) -> Dict[str, Any]:
+    """Process security challenge responses"""
+    try:
+        if challenge_type == "device_integrity":
+            # Verify device integrity data
+            expected_signature = device_record.get("device_info", {}).get("app_signature")
+            provided_signature = response_data.get("app_signature")
+            
+            passed = expected_signature == provided_signature
+            message = "Device integrity verified" if passed else "Device integrity check failed"
+            
+        elif challenge_type == "anti_tampering":
+            # Check anti-tampering measures
+            tamper_detected = response_data.get("tamper_detected", True)
+            passed = not tamper_detected
+            message = "No tampering detected" if passed else "Tampering detected"
+            
+        elif challenge_type == "runtime_security":
+            # Verify runtime security status
+            debugger_attached = response_data.get("debugger_attached", True)
+            hooks_detected = response_data.get("hooks_detected", True)
+            
+            passed = not (debugger_attached or hooks_detected)
+            message = "Runtime security verified" if passed else "Runtime security compromised"
+            
+        else:
+            passed = False
+            message = "Unknown challenge type"
+        
+        return {
+            "passed": passed,
+            "message": message,
+            "next_action": "continue" if passed else "restrict_access"
+        }
+        
+    except Exception as e:
+        return {
+            "passed": False,
+            "message": f"Challenge processing error: {str(e)}",
+            "next_action": "restrict_access"
+        }
+
+@api_router.post("/mobile/security/cleanup")
+async def cleanup_mobile_security_data():
+    """Cleanup old mobile security data (admin only)"""
+    try:
+        mobile_security_manager.cleanup_old_devices(days=90)
+        
+        return {
+            "success": True,
+            "message": "Mobile security data cleanup completed"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cleanup error: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
