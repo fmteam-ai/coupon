@@ -52,11 +52,12 @@ export default function QRDisplayPage() {
         {/* QR Code */}
         <View style={styles.qrContainer}>
           <View style={styles.qrCodeWrapper}>
-            {/* Placeholder for QR Code - In real app, use react-native-qrcode-svg */}
-            <View style={styles.qrCodePlaceholder}>
-              <Text style={styles.qrCodeText}>{qr_code}</Text>
-              <Text style={styles.qrPlaceholderText}>QR Code</Text>
-            </View>
+            <QRCode
+              value={qr_code as string || 'default-qr-code'}
+              size={width * 0.6}
+              backgroundColor="white"
+              color="black"
+            />
           </View>
           
           <Text style={styles.instructionText}>
