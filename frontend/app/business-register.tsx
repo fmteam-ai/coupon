@@ -36,6 +36,8 @@ interface BusinessData {
   phone: string;
   address: string;
   city: string;
+  postalCode: string;
+  state: string;
   country: string;
   language: string;
   logo?: string;
