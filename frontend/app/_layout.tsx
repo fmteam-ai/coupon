@@ -2,6 +2,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
+import { LanguageProvider } from '../contexts/LanguageContext';
 
 export default function RootLayout() {
   return (
