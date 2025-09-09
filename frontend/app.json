@@ -11,6 +11,8 @@
     "description": "Discover amazing discounts and deals from local businesses. Earn rewards, get cashback, and enjoy AI-powered recommendations.",
     "keywords": ["discount", "coupon", "deals", "savings", "cashback", "rewards"],
     "privacy": "public",
+    "platforms": ["ios", "android", "web"],
+    "sdkVersion": "54.0.0",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.couponapp.mobile",
