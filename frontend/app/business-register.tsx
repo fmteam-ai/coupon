@@ -504,6 +504,7 @@ export default function BusinessRegisterPage() {
             onClose={() => setShowMapModal(false)}
             onLocationSelected={handleMapLocationSelect}
             initialLocation={locationCoordinates || undefined}
+            initialAddress={`${formData.address}, ${formData.city}`.trim().replace(/^,\s*/, '')}
             title="Select Your Business Location"
           />
 
