@@ -121,25 +121,20 @@ export default function BusinessRegisterPage() {
 
   const handleMapLocationSelect = (location: LocationCoordinates) => {
     setLocationCoordinates(location);
+    
+    // Auto-populate form fields from location data
     setFormData(prev => ({ 
       ...prev, 
       latitude: location.latitude, 
-      longitude: location.longitude 
+      longitude: location.longitude,
+      // Auto-fill address components if available
+      address: location.address || prev.address,
+      city: location.city || prev.city,
+      postalCode: location.postalCode || prev.postalCode,
+      state: location.state || prev.state,
+      country: location.country || prev.country,
     }));
     
-    // If we have address info from the location, we can update the address field
-    if (location.address) {
-      // Parse the address to extract city and address parts if possible
-      const addressParts = location.address.split(', ');
-      if (addressParts.length >= 2) {
-        const city = addressParts[addressParts.length - 2] || formData.city;
-        setFormData(prev => ({ 
-          ...prev, 
-          address: addressParts.slice(0, -2).join(', ') || prev.address,
-          city: city 
-        }));
-      }
-    }
     setShowMapModal(false);
   };
 
