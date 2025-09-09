@@ -146,40 +146,6 @@ export default function BusinessAuthRegisterPage() {
     updateFormData('country', country.code);
   };
 
-  const getCurrentLocation = async () => {
-    try {
-      setLocationStatus('getting');
-      
-      // Request permission
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission is required to set your business location');
-        setLocationStatus('not_set');
-        return;
-      }
-
-      // Get current location
-      const location = await Location.getCurrentPositionAsync({});
-      
-      updateFormData('latitude', location.coords.latitude);
-      updateFormData('longitude', location.coords.longitude);
-      
-      // For now, use current location as precise location
-      // In a full implementation, this would open a map picker
-      updateFormData('precise_latitude', location.coords.latitude);
-      updateFormData('precise_longitude', location.coords.longitude);
-      updateFormData('location_verified_by_map', true);
-      
-      setLocationStatus('set');
-      Alert.alert('Location Set', 'Your business location has been set successfully');
-      
-    } catch (error) {
-      console.error('Error getting location:', error);
-      Alert.alert('Location Error', 'Failed to get your current location');
-      setLocationStatus('not_set');
-    }
-  };
-
   const validateStep = (stepNumber: number): boolean => {
     switch (stepNumber) {
       case 1: // Business Info
