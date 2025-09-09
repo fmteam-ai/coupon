@@ -2619,28 +2619,6 @@ class BusinessAction(BaseModel):
     action: str  # "suspend", "unsuspend", "delete", "approve", "reject"
     reason: Optional[str] = None
 
-class PushTokenRequest(BaseModel):
-    pushToken: str
-
-class QuickDealRequest(BaseModel):
-    title: str
-    description: str
-    discount: int
-    validUntil: Optional[str] = None
-    active: bool = True
-    maxRedemptions: Optional[int] = None
-
-class DealAlertRequest(BaseModel):
-    dealId: str
-    radius: Optional[int] = 1000
-
-class NotificationMetric(BaseModel):
-    action: str  # "received", "tapped"
-    type: str  # "deal", "nearby", "recommendation"
-    dealId: Optional[str] = None
-    businessId: Optional[str] = None
-    timestamp: str
-
 @api_router.post("/admin/business/suspend")
 async def suspend_business(suspension_data: BusinessSuspension, admin_user: User = Depends(require_admin)):
     """Admin endpoint to suspend a business for ToS violations"""
