@@ -131,6 +131,27 @@ export default function RootLayout() {
         }}
       />
 
+      <Tabs.Screen
+        name="privacy-policy"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      
+      <Tabs.Screen
+        name="terms-of-use"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      
+      <Tabs.Screen
+        name="business-terms"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+
       {/* Dynamic routes */}
       <Tabs.Screen
         name="business"
