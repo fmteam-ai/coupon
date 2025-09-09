@@ -441,4 +441,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  // Web-specific styles
+  webMapPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 32,
+  },
+  webMapText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+  },
+  webMapSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  webLocationInfo: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e1e1e1',
+  },
+  webLocationText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  webLocationAddress: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
 });
