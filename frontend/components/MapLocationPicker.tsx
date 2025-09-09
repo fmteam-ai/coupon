@@ -13,20 +13,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Conditionally import maps only on native platforms
-let MapView: any, Marker: any, Region: any;
-try {
-  if (Platform.OS !== 'web') {
-    const Maps = require('react-native-maps');
-    MapView = Maps.default;
-    Marker = Maps.Marker;
-    Region = Maps.Region;
-  }
-} catch (error) {
-  console.log('react-native-maps not available:', error);
-  MapView = null;
-  Marker = null;
-  Region = null;
+// Types
+interface Region {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
 }
 
 interface LocationData {
