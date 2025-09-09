@@ -135,6 +135,18 @@ class PhoneVerification(BaseModel):
     phone: str
     code: str
 
+class BusinessEmailVerification(BaseModel):
+    business_id: str
+    email: EmailStr
+    verification_code: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: datetime = Field(default_factory=lambda: datetime.utcnow() + timedelta(hours=24))
+    verified: bool = False
+    verified_at: Optional[datetime] = None
+
+class VerifyBusinessEmailRequest(BaseModel):
+    verification_code: str
+
 # Gamification Models
 class UserReward(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
