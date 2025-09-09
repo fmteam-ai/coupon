@@ -790,13 +790,20 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   loginText: {
-    color: '#fff',
+    color: '#ffffff',
+    fontSize: 14,
     fontWeight: '600',
+    letterSpacing: 0.3,
   },
   searchContainer: {
     flexDirection: 'row',
