@@ -672,6 +672,29 @@ export default function HomePage() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Floating Voice Assistant Button */}
+      <TouchableOpacity
+        style={styles.floatingVoiceButton}
+        onPress={() => setShowVoiceAssistant(true)}
+      >
+        <VoiceAssistant compact={true} onDealFound={handleVoiceDealsFound} />
+      </TouchableOpacity>
+
+      {/* Voice Assistant Modal */}
+      <Modal
+        visible={showVoiceAssistant}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowVoiceAssistant(false)}
+      >
+        <SafeAreaView style={styles.voiceModal}>
+          <VoiceAssistant
+            onDealFound={handleVoiceDealsFound}
+            onClose={() => setShowVoiceAssistant(false)}
+          />
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
