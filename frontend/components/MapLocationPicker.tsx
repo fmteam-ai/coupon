@@ -219,8 +219,8 @@ export default function MapLocationPicker({
 
         {/* Map */}
         <View style={styles.mapContainer}>
-          {Platform.OS !== 'web' && MapView ? (
-            <MapView
+          {Platform.OS !== 'web' && MapComponent && MarkerComponent ? (
+            <MapComponent
               style={styles.map}
               region={region}
               onRegionChangeComplete={setRegion}
@@ -230,7 +230,7 @@ export default function MapLocationPicker({
               toolbarEnabled={false}
             >
               {selectedLocation && (
-                <Marker
+                <MarkerComponent
                   coordinate={{
                     latitude: selectedLocation.latitude,
                     longitude: selectedLocation.longitude,
@@ -240,7 +240,7 @@ export default function MapLocationPicker({
                   pinColor="#007AFF"
                 />
               )}
-            </MapView>
+            </MapComponent>
           ) : (
             // Web fallback: Show a placeholder with location coordinates
             <View style={styles.webMapPlaceholder}>
