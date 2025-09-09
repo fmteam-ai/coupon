@@ -32,6 +32,7 @@ from security_utils import (
 )
 from auth_security import enhanced_auth_manager, UserRole, Permission
 from data_protection import data_protection_manager, DataClassification, ConsentType
+from mobile_security import mobile_security_manager, DeviceRiskLevel, SecurityThreat
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
