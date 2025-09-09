@@ -1035,6 +1035,13 @@ async def main():
         
         await tester.test_dynamic_pricing_system()
         
+        # Run NEW COMPUTER VISION & AR SYSTEM tests
+        print("\n" + "="*60)
+        print("📷🥽 TESTING COMPUTER VISION & AR FEATURES SYSTEM")
+        print("="*60)
+        
+        await tester.test_computer_vision_ar_system()
+        
         # Print summary
         success = tester.print_summary()
         
