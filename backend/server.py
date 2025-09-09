@@ -1929,26 +1929,255 @@ async def stripe_webhook(request: Request):
     
     return {"received": True}
 
-# Enhanced business creation with automatic subscription setup
-async def create_business_with_subscription(business: Business, trial_days: int = 365):
-    """Enhanced business creation with automatic subscription setup"""
+# Enhanced Business Models with Trial Abuse Prevention
+class DeletedBusiness(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    business_name: str
+    business_email: str
+    business_phone: str
+    location: str
+    # Additional identifiers for matching
+    owner_email: Optional[str] = None
+    deleted_at: datetime = Field(default_factory=datetime.utcnow)
+    reason: str = "user_deleted"  # user_deleted, admin_suspended, etc.
+
+class BusinessRegistrationWithTrialCheck(BaseModel):
+    name: str
+    email: str
+    phone: str
+    address: str
+    city: str
+    state: str
+    zip_code: str
+    country: str = "US"
+    category: str
+    description: str
+    website: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+# ============================================================================
+# TRIAL ABUSE PREVENTION SYSTEM
+# ============================================================================
+
+async def check_previous_business_existence(business_data: dict, owner_email: str) -> dict:
+    """
+    Check if a business has been registered before to prevent trial abuse
+    Returns: {"has_previous": bool, "trial_eligible": bool, "reason": str}
+    """
+    # Check deleted businesses collection
+    deleted_business = await db.deleted_businesses.find_one({
+        "$or": [
+            {"business_email": business_data["email"]},
+            {"business_phone": business_data["phone"]},
+            {
+                "$and": [
+                    {"business_name": {"$regex": f"^{re.escape(business_data['name'])}$", "$options": "i"}},
+                    {"location": {"$regex": f".*{re.escape(business_data['city'])}.*", "$options": "i"}}
+                ]
+            },
+            {"owner_email": owner_email}
+        ]
+    })
+    
+    if deleted_business:
+        return {
+            "has_previous": True,
+            "trial_eligible": False,
+            "reason": f"Business previously registered on {deleted_business['deleted_at'].strftime('%Y-%m-%d')}. No trial period available.",
+            "previous_deletion_date": deleted_business["deleted_at"].isoformat()
+        }
+    
+    # Also check current active businesses to prevent duplicates
+    existing_business = await db.businesses.find_one({
+        "$or": [
+            {"email": business_data["email"]},
+            {"phone": business_data["phone"]},
+            {
+                "$and": [
+                    {"name": {"$regex": f"^{re.escape(business_data['name'])}$", "$options": "i"}},
+                    {"city": {"$regex": f"^{re.escape(business_data['city'])}$", "$options": "i"}}
+                ]
+            }
+        ]
+    })
+    
+    if existing_business:
+        return {
+            "has_previous": True,
+            "trial_eligible": False,
+            "reason": "Business already exists in the system.",
+            "existing_business_id": existing_business["id"]
+        }
+    
+    return {
+        "has_previous": False,
+        "trial_eligible": True,
+        "reason": "New business - eligible for 90-day trial period."
+    }
+
+@api_router.post("/business/check-eligibility")
+async def check_business_trial_eligibility(business_data: BusinessRegistrationWithTrialCheck, user: User = Depends(require_auth)):
+    """Check if a business is eligible for trial period before registration"""
+    try:
+        eligibility = await check_previous_business_existence(business_data.dict(), user.email)
+        
+        return {
+            "eligible_for_trial": eligibility["trial_eligible"],
+            "reason": eligibility["reason"],
+            "trial_days": 90 if eligibility["trial_eligible"] else 0,
+            "has_previous_registration": eligibility["has_previous"],
+            "details": {
+                "previous_deletion_date": eligibility.get("previous_deletion_date"),
+                "existing_business_id": eligibility.get("existing_business_id")
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Eligibility check failed: {str(e)}")
+
+@api_router.delete("/business/delete-profile")
+async def delete_business_profile(user: User = Depends(require_auth)):
+    """
+    Delete business profile but keep tracking data to prevent trial abuse
+    """
+    try:
+        # Get user's business
+        business = await db.businesses.find_one({"owner_id": user.id})
+        if not business:
+            raise HTTPException(status_code=404, detail="No business found for this user")
+        
+        # Store deleted business data for trial prevention
+        deleted_business_record = DeletedBusiness(
+            business_name=business["name"],
+            business_email=business["email"],
+            business_phone=business["phone"],
+            location=f"{business['address']}, {business['city']}, {business['state']} {business['zip_code']}",
+            owner_email=user.email,
+            reason="user_deleted"
+        )
+        
+        # Insert into deleted businesses collection
+        await db.deleted_businesses.insert_one(deleted_business_record.dict())
+        
+        # Cancel any active subscription
+        subscription = await db.business_subscriptions.find_one({"business_id": business["id"]})
+        if subscription and subscription.get("stripe_subscription_id"):
+            try:
+                stripe.Subscription.cancel(subscription["stripe_subscription_id"])
+            except Exception as stripe_error:
+                print(f"Stripe cancellation error: {stripe_error}")
+        
+        # Delete business subscription
+        await db.business_subscriptions.delete_many({"business_id": business["id"]})
+        
+        # Delete business discounts
+        await db.discounts.delete_many({"business_id": business["id"]})
+        
+        # Delete business ratings
+        await db.business_ratings.delete_many({"business_id": business["id"]})
+        
+        # Delete the business profile
+        await db.businesses.delete_one({"id": business["id"]})
+        
+        return {
+            "success": True,
+            "message": "Business profile deleted successfully",
+            "note": "Business information has been recorded to prevent trial abuse if you register again."
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete business profile: {str(e)}")
+
+# Enhanced business registration with trial abuse prevention
+@api_router.post("/businesses/register-with-trial-check")
+async def register_business_with_trial_check(business_data: BusinessRegistrationWithTrialCheck, user: User = Depends(require_auth)):
+    """Enhanced business registration with trial abuse prevention"""
+    try:
+        # Check trial eligibility
+        eligibility = await check_previous_business_existence(business_data.dict(), user.email)
+        
+        # Create business object
+        business = Business(
+            **business_data.dict(),
+            owner_id=user.id,
+            is_approved=False,  # Requires admin approval
+            trial_eligible=eligibility["trial_eligible"]
+        )
+        
+        # Insert business
+        await db.businesses.insert_one(business.dict())
+        
+        # Create subscription based on eligibility
+        trial_days = 90 if eligibility["trial_eligible"] else 0
+        subscription_status = "trial" if eligibility["trial_eligible"] else "expired_trial"
+        
+        if eligibility["trial_eligible"]:
+            # Create trial subscription
+            trial_subscription = BusinessSubscription(
+                business_id=business.id,
+                plan_id="free",
+                status=subscription_status,
+                trial_end=datetime.utcnow() + timedelta(days=trial_days)
+            )
+        else:
+            # Create expired trial subscription (requires immediate payment)
+            trial_subscription = BusinessSubscription(
+                business_id=business.id,
+                plan_id="free",
+                status="expired_trial",
+                trial_end=datetime.utcnow() - timedelta(days=1)  # Already expired
+            )
+        
+        await db.business_subscriptions.insert_one(trial_subscription.dict())
+        
+        return {
+            "success": True,
+            "business_id": business.id,
+            "trial_eligible": eligibility["trial_eligible"],
+            "trial_days": trial_days,
+            "subscription_status": subscription_status,
+            "message": eligibility["reason"],
+            "requires_admin_approval": True,
+            "upgrade_required": not eligibility["trial_eligible"]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Business registration failed: {str(e)}")
+
+# Update existing business registration to use 90-day trial
+async def create_business_with_90_day_trial(business: Business, user_email: str) -> dict:
+    """Enhanced business creation with 90-day trial and abuse prevention"""
+    
+    # Check trial eligibility
+    eligibility = await check_previous_business_existence(business.dict(), user_email)
     
     # Insert business
+    business.trial_eligible = eligibility["trial_eligible"]
     await db.businesses.insert_one(business.dict())
     
-    # Create trial subscription
+    # Create subscription
+    trial_days = 90 if eligibility["trial_eligible"] else 0
+    subscription_status = "trial" if eligibility["trial_eligible"] else "expired_trial"
+    
+    if eligibility["trial_eligible"]:
+        trial_end = datetime.utcnow() + timedelta(days=trial_days)
+    else:
+        trial_end = datetime.utcnow() - timedelta(days=1)  # Already expired
+    
     trial_subscription = BusinessSubscription(
         business_id=business.id,
-        plan_id="free",  # Start with free plan during trial
-        status="trial",
-        trial_end=datetime.utcnow() + timedelta(days=trial_days)
+        plan_id="free",
+        status=subscription_status,
+        trial_end=trial_end
     )
     await db.business_subscriptions.insert_one(trial_subscription.dict())
     
     return {
         "business_id": business.id,
         "trial_days": trial_days,
-        "subscription_id": trial_subscription.id
+        "subscription_id": trial_subscription.id,
+        "trial_eligible": eligibility["trial_eligible"],
+        "message": eligibility["reason"]
     }
 
 # Include the router in the main app
