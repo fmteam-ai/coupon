@@ -1482,6 +1482,474 @@ async def get_categories():
     ]
     return categories
 
+# ============================================================================
+# BUSINESS SUBSCRIPTION MONETIZATION SYSTEM
+# ============================================================================
+
+class SubscriptionPlanCreate(BaseModel):
+    name: str
+    description: str
+    price: float
+    features: List[str]
+    max_coupons: int = -1  # -1 for unlimited
+    max_locations: int = 1
+    analytics_included: bool = True
+    ai_recommendations: bool = False
+    geofencing: bool = False
+    advanced_analytics: bool = False
+
+class SubscriptionUpgrade(BaseModel):
+    plan_id: str
+
+# Initialize default subscription plans
+@api_router.post("/admin/subscription-plans/init")
+async def initialize_subscription_plans(user: User = Depends(require_admin_auth)):
+    """Initialize default subscription plans - Admin only"""
+    
+    # Check if plans already exist
+    existing_plans = await db.subscription_plans.find_one()
+    if existing_plans:
+        return {"message": "Subscription plans already initialized"}
+    
+    # Create Stripe products and prices
+    try:
+        # FREE PLAN (for trial and free tier)
+        free_plan = SubscriptionPlan(
+            id="free",
+            name="Free Plan",
+            description="Basic business listing with limited features",
+            price=0.0,
+            stripe_price_id="free",
+            features=[
+                "Basic business listing",
+                "Up to 3 active discounts",
+                "Basic analytics (views, clicks)",
+                "Standard search placement"
+            ],
+            max_coupons=3,
+            max_locations=1,
+            analytics_included=True,
+            ai_recommendations=False,
+            geofencing=False,
+            advanced_analytics=False
+        )
+        
+        # PROFESSIONAL PLAN ($79/month)
+        stripe_professional_product = stripe.Product.create(
+            name="CouponApp Professional Plan",
+            description="Professional business features with advanced analytics"
+        )
+        
+        stripe_professional_price = stripe.Price.create(
+            product=stripe_professional_product.id,
+            unit_amount=7900,  # $79.00
+            currency='usd',
+            recurring={'interval': 'month'},
+            nickname="Professional Monthly"
+        )
+        
+        professional_plan = SubscriptionPlan(
+            id="professional",
+            name="Professional Plan",
+            description="Advanced features for growing businesses",
+            price=79.0,
+            stripe_price_id=stripe_professional_price.id,
+            features=[
+                "Unlimited discounts and campaigns",
+                "Advanced analytics dashboard",
+                "Priority placement in search results",
+                "Geofencing notifications to nearby users",
+                "Customer insights and behavior data",
+                "Promotional email to user base",
+                "AI-powered deal optimization",
+                "Priority customer support"
+            ],
+            max_coupons=-1,  # Unlimited
+            max_locations=5,
+            analytics_included=True,
+            ai_recommendations=True,
+            geofencing=True,
+            advanced_analytics=True
+        )
+        
+        # ENTERPRISE PLAN ($199/month)
+        stripe_enterprise_product = stripe.Product.create(
+            name="CouponApp Enterprise Plan",
+            description="Enterprise features with API access and white-label options"
+        )
+        
+        stripe_enterprise_price = stripe.Price.create(
+            product=stripe_enterprise_product.id,
+            unit_amount=19900,  # $199.00
+            currency='usd',
+            recurring={'interval': 'month'},
+            nickname="Enterprise Monthly"
+        )
+        
+        enterprise_plan = SubscriptionPlan(
+            id="enterprise",
+            name="Enterprise Plan",
+            description="Full-featured enterprise solution",
+            price=199.0,
+            stripe_price_id=stripe_enterprise_price.id,
+            features=[
+                "All Professional features",
+                "Unlimited locations",
+                "API access for integration",
+                "White-label business app",
+                "Dedicated account management",
+                "Custom analytics reporting",
+                "Advanced AI recommendation priority",
+                "24/7 premium support",
+                "Custom integrations"
+            ],
+            max_coupons=-1,  # Unlimited
+            max_locations=-1,  # Unlimited
+            analytics_included=True,
+            ai_recommendations=True,
+            geofencing=True,
+            advanced_analytics=True
+        )
+        
+        # Insert plans into database
+        await db.subscription_plans.insert_many([
+            free_plan.dict(),
+            professional_plan.dict(),
+            enterprise_plan.dict()
+        ])
+        
+        return {
+            "success": True,
+            "message": "Subscription plans initialized successfully",
+            "plans": [
+                {"name": "Free Plan", "price": "$0/month"},
+                {"name": "Professional Plan", "price": "$79/month", "stripe_price_id": stripe_professional_price.id},
+                {"name": "Enterprise Plan", "price": "$199/month", "stripe_price_id": stripe_enterprise_price.id}
+            ]
+        }
+        
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Stripe error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to initialize plans: {str(e)}")
+
+@api_router.get("/subscription-plans")
+async def get_subscription_plans():
+    """Get all available subscription plans"""
+    plans = await db.subscription_plans.find().to_list(100)
+    return plans
+
+@api_router.get("/business/subscription/status")
+async def get_business_subscription_status(user: User = Depends(require_auth)):
+    """Get current business subscription status"""
+    
+    # Get user's business
+    business = await db.businesses.find_one({"owner_id": user.id})
+    if not business:
+        raise HTTPException(status_code=404, detail="No business found for this user")
+    
+    # Get subscription status
+    subscription = await db.business_subscriptions.find_one({"business_id": business["id"]})
+    if not subscription:
+        raise HTTPException(status_code=404, detail="No subscription found")
+    
+    # Get current plan details
+    plan = await db.subscription_plans.find_one({"id": subscription.get("plan_id", "free")})
+    
+    # Calculate trial/subscription info
+    now = datetime.utcnow()
+    status_info = {
+        "subscription_id": subscription["id"],
+        "business_id": business["id"],
+        "business_name": business["name"],
+        "plan": plan,
+        "status": subscription["status"],
+        "stripe_subscription_id": subscription.get("stripe_subscription_id"),
+        "stripe_customer_id": subscription.get("stripe_customer_id")
+    }
+    
+    if subscription["status"] == "trial":
+        trial_end = datetime.fromisoformat(subscription["trial_end"])
+        days_remaining = max(0, (trial_end - now).days)
+        status_info.update({
+            "trial_active": True,
+            "trial_end": subscription["trial_end"],
+            "days_remaining": days_remaining,
+            "trial_expired": days_remaining <= 0
+        })
+    elif subscription["status"] == "active":
+        if subscription.get("current_period_end"):
+            period_end = datetime.fromisoformat(subscription["current_period_end"])
+            days_until_renewal = max(0, (period_end - now).days)
+            status_info.update({
+                "trial_active": False,
+                "current_period_end": subscription["current_period_end"],
+                "days_until_renewal": days_until_renewal
+            })
+    
+    return status_info
+
+@api_router.post("/business/subscription/upgrade")
+async def upgrade_business_subscription(upgrade_data: SubscriptionUpgrade, user: User = Depends(require_auth)):
+    """Upgrade business subscription to paid plan"""
+    
+    # Get user's business
+    business = await db.businesses.find_one({"owner_id": user.id})
+    if not business:
+        raise HTTPException(status_code=404, detail="No business found for this user")
+    
+    # Get current subscription
+    current_subscription = await db.business_subscriptions.find_one({"business_id": business["id"]})
+    if not current_subscription:
+        raise HTTPException(status_code=404, detail="No subscription found")
+    
+    # Get target plan details
+    target_plan = await db.subscription_plans.find_one({"id": upgrade_data.plan_id})
+    if not target_plan:
+        raise HTTPException(status_code=404, detail="Subscription plan not found")
+    
+    if target_plan["price"] == 0:
+        raise HTTPException(status_code=400, detail="Cannot upgrade to free plan")
+    
+    try:
+        # Create or get Stripe customer
+        stripe_customer_id = current_subscription.get("stripe_customer_id")
+        
+        if not stripe_customer_id:
+            # Create new Stripe customer
+            stripe_customer = stripe.Customer.create(
+                email=user.email,
+                name=user.name,
+                metadata={
+                    "business_id": business["id"],
+                    "business_name": business["name"],
+                    "user_id": user.id
+                }
+            )
+            stripe_customer_id = stripe_customer.id
+        
+        # Create Stripe subscription
+        stripe_subscription = stripe.Subscription.create(
+            customer=stripe_customer_id,
+            items=[{
+                'price': target_plan["stripe_price_id"],
+            }],
+            metadata={
+                "business_id": business["id"],
+                "plan_id": upgrade_data.plan_id,
+                "user_id": user.id
+            }
+        )
+        
+        # Update subscription in database
+        now = datetime.utcnow()
+        await db.business_subscriptions.update_one(
+            {"business_id": business["id"]},
+            {"$set": {
+                "plan_id": upgrade_data.plan_id,
+                "status": "active",
+                "stripe_subscription_id": stripe_subscription.id,
+                "stripe_customer_id": stripe_customer_id,
+                "current_period_start": now.isoformat(),
+                "current_period_end": datetime.fromtimestamp(stripe_subscription.current_period_end).isoformat(),
+                "updated_at": now.isoformat()
+            }}
+        )
+        
+        return {
+            "success": True,
+            "message": f"Successfully upgraded to {target_plan['name']}",
+            "subscription_id": stripe_subscription.id,
+            "plan": target_plan,
+            "current_period_end": datetime.fromtimestamp(stripe_subscription.current_period_end).isoformat()
+        }
+        
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Payment processing error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upgrade failed: {str(e)}")
+
+@api_router.post("/business/subscription/cancel")
+async def cancel_business_subscription(user: User = Depends(require_auth)):
+    """Cancel business subscription (downgrade to free at end of current period)"""
+    
+    # Get user's business
+    business = await db.businesses.find_one({"owner_id": user.id})
+    if not business:
+        raise HTTPException(status_code=404, detail="No business found for this user")
+    
+    # Get current subscription
+    subscription = await db.business_subscriptions.find_one({"business_id": business["id"]})
+    if not subscription or subscription["status"] != "active":
+        raise HTTPException(status_code=400, detail="No active subscription to cancel")
+    
+    try:
+        # Cancel Stripe subscription at period end
+        if subscription.get("stripe_subscription_id"):
+            stripe.Subscription.modify(
+                subscription["stripe_subscription_id"],
+                cancel_at_period_end=True
+            )
+        
+        # Update subscription status
+        await db.business_subscriptions.update_one(
+            {"business_id": business["id"]},
+            {"$set": {
+                "status": "cancelled",
+                "updated_at": datetime.utcnow().isoformat()
+            }}
+        )
+        
+        return {
+            "success": True,
+            "message": "Subscription cancelled. You'll continue to have access until the end of your current billing period.",
+            "access_until": subscription.get("current_period_end")
+        }
+        
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Cancellation error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cancellation failed: {str(e)}")
+
+@api_router.get("/business/usage-analytics")
+async def get_business_usage_analytics(user: User = Depends(require_auth)):
+    """Get business usage analytics to show ROI"""
+    
+    # Get user's business
+    business = await db.businesses.find_one({"owner_id": user.id})
+    if not business:
+        raise HTTPException(status_code=404, detail="No business found for this user")
+    
+    # Get subscription status
+    subscription = await db.business_subscriptions.find_one({"business_id": business["id"]})
+    current_plan = await db.subscription_plans.find_one({"id": subscription.get("plan_id", "free")}) if subscription else None
+    
+    # Calculate analytics for the last 30 days
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    
+    # Get discount performance
+    discounts = await db.discounts.find({"business_id": business["id"]}).to_list(1000)
+    active_discounts = [d for d in discounts if d.get("is_active", True)]
+    
+    # Get recent redemptions (you may need to implement redemption tracking)
+    # For now, using ratings as a proxy for customer engagement
+    recent_ratings = await db.business_ratings.find({
+        "business_id": business["id"],
+        "created_at": {"$gte": thirty_days_ago.isoformat()}
+    }).to_list(1000)
+    
+    # Calculate estimated ROI
+    monthly_cost = current_plan["price"] if current_plan else 0
+    estimated_customer_value = len(recent_ratings) * 25  # Estimate $25 average customer value
+    estimated_roi = ((estimated_customer_value - monthly_cost) / max(monthly_cost, 1)) * 100 if monthly_cost > 0 else 0
+    
+    return {
+        "business_name": business["name"],
+        "current_plan": current_plan,
+        "monthly_cost": monthly_cost,
+        "analytics_period": "Last 30 days",
+        "metrics": {
+            "total_discounts": len(discounts),
+            "active_discounts": len(active_discounts),
+            "recent_customer_engagement": len(recent_ratings),
+            "estimated_customer_value": estimated_customer_value,
+            "estimated_roi": estimated_roi,
+            "business_rating": business.get("rating", 0),
+            "total_reviews": business.get("review_count", 0)
+        },
+        "recommendations": [
+            "Create more time-limited offers to increase urgency" if len(active_discounts) < 5 else None,
+            "Encourage customer reviews to improve rating" if business.get("rating", 0) < 4.0 else None,
+            "Consider upgrading to Professional plan for AI-powered recommendations" if not current_plan or current_plan["id"] == "free" else None
+        ]
+    }
+
+@api_router.post("/webhooks/stripe")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhooks for subscription events"""
+    
+    payload = await request.body()
+    sig_header = request.headers.get('stripe-signature')
+    
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, os.environ.get('STRIPE_WEBHOOK_SECRET')
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    
+    # Handle the event
+    if event['type'] == 'subscription.created':
+        subscription = event['data']['object']
+        # Subscription already handled in upgrade endpoint
+        print(f"Subscription created: {subscription['id']}")
+        
+    elif event['type'] == 'subscription.updated':
+        subscription = event['data']['object']
+        # Update subscription status in database
+        await db.business_subscriptions.update_one(
+            {"stripe_subscription_id": subscription['id']},
+            {"$set": {
+                "status": subscription['status'],
+                "current_period_end": datetime.fromtimestamp(subscription['current_period_end']).isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }}
+        )
+        
+    elif event['type'] == 'subscription.deleted':
+        subscription = event['data']['object']
+        # Downgrade to free plan
+        business_subscription = await db.business_subscriptions.find_one(
+            {"stripe_subscription_id": subscription['id']}
+        )
+        if business_subscription:
+            await db.business_subscriptions.update_one(
+                {"stripe_subscription_id": subscription['id']},
+                {"$set": {
+                    "plan_id": "free",
+                    "status": "active",  # Active on free plan
+                    "stripe_subscription_id": None,
+                    "current_period_start": None,
+                    "current_period_end": None,
+                    "updated_at": datetime.utcnow().isoformat()
+                }}
+            )
+    
+    elif event['type'] == 'invoice.payment_succeeded':
+        invoice = event['data']['object']
+        print(f"Payment succeeded for subscription: {invoice['subscription']}")
+        
+    elif event['type'] == 'invoice.payment_failed':
+        invoice = event['data']['object']
+        print(f"Payment failed for subscription: {invoice['subscription']}")
+        # You might want to send an email notification here
+    
+    return {"received": True}
+
+# Enhanced business creation with automatic subscription setup
+async def create_business_with_subscription(business: Business, trial_days: int = 365):
+    """Enhanced business creation with automatic subscription setup"""
+    
+    # Insert business
+    await db.businesses.insert_one(business.dict())
+    
+    # Create trial subscription
+    trial_subscription = BusinessSubscription(
+        business_id=business.id,
+        plan_id="free",  # Start with free plan during trial
+        status="trial",
+        trial_end=datetime.utcnow() + timedelta(days=trial_days)
+    )
+    await db.business_subscriptions.insert_one(trial_subscription.dict())
+    
+    return {
+        "business_id": business.id,
+        "trial_days": trial_days,
+        "subscription_id": trial_subscription.id
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
