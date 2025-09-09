@@ -314,6 +314,25 @@ export default function BusinessDetailPage() {
                 <Text style={styles.expiryText}>
                   Valid until: {new Date(discount.expires_at).toLocaleDateString()}
                 </Text>
+                
+                {/* Social Actions */}
+                <View style={styles.socialActions}>
+                  <TouchableOpacity 
+                    style={styles.socialButton}
+                    onPress={() => handleShareDeal(discount.id, business.name, discount.title)}
+                  >
+                    <Ionicons name="share-outline" size={16} color="#007AFF" />
+                    <Text style={styles.socialButtonText}>Share</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.socialButton}
+                    onPress={() => handleViewSocialProof(discount.id)}
+                  >
+                    <Ionicons name="people-outline" size={16} color="#34C759" />
+                    <Text style={styles.socialButtonText}>Who Used</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ))
           ) : (
