@@ -379,12 +379,7 @@ export default function BusinessRegisterPage() {
               <TextInput
                 style={styles.input}
                 value={formData.address}
-                onChangeText={(text) => {
-                  setFormData(prev => ({ ...prev, address: text }));
-                  if (text.length > 10) {
-                    setShowMapForAddress(true);
-                  }
-                }}
+                onChangeText={handleAddressChange}
                 placeholder="123 Main Street"
                 placeholderTextColor="#999"
               />
