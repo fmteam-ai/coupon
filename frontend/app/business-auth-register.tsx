@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -17,8 +18,17 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { CountrySelector } from '../components/CountryPicker';
-import MapLocationPicker from '../components/MapLocationPicker';
 import { Country } from '../utils/countries';
+
+// Conditionally import MapLocationPicker only on native platforms
+let MapLocationPicker: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    MapLocationPicker = require('../components/MapLocationPicker').default;
+  } catch (error) {
+    console.warn('MapLocationPicker not available on this platform');
+  }
+}
 
 const EXPO_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
