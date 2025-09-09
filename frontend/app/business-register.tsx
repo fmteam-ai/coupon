@@ -153,10 +153,12 @@ export default function BusinessRegisterPage() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color="#007AFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Register Business</Text>
-        <View style={styles.placeholder} />
+        <Text style={[styles.headerTitle, { textAlign: getTextAlign('center') }]}>
+          {t.businessRegistration.title}
+        </Text>
+        <View style={styles.headerRight} />
       </View>
 
       <KeyboardAvoidingView 
