@@ -1238,4 +1238,20 @@ const styles = StyleSheet.create({
     color: '#666',
     lineHeight: 16,
   },
+  floatingVoiceButton: {
+    position: 'absolute',
+    bottom: 90, // Above bottom tab bar
+    right: 20,
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  voiceModal: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    paddingTop: 20,
+  },
 });
