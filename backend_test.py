@@ -60,17 +60,18 @@ class BackendTester:
             response = await self.client.post(f"{API_BASE}/auth/session", 
                                             json={"session_id": "mock_session_id"})
             
-            if response.status_code == 400 and "Missing session_id" not in response.text:
-                # If we get 401 or auth error, the endpoint is working but auth failed (expected)
-                self.log_result('authentication', 'Session endpoint structure', True)
+            # The endpoint should return 401 because the external auth service call fails
+            # This is expected behavior and shows the endpoint is working correctly
+            if response.status_code == 401:
+                self.log_result('authentication', 'Session endpoint auth validation', True)
             elif response.status_code == 400:
-                self.log_result('authentication', 'Session endpoint structure', False, 
-                              "Endpoint expects session_id but validation failed")
+                self.log_result('authentication', 'Session endpoint auth validation', False, 
+                              "Endpoint validation failed")
             else:
-                self.log_result('authentication', 'Session endpoint structure', False, 
+                self.log_result('authentication', 'Session endpoint auth validation', False, 
                               f"Unexpected response: {response.status_code}")
         except Exception as e:
-            self.log_result('authentication', 'Session endpoint structure', False, str(e))
+            self.log_result('authentication', 'Session endpoint auth validation', False, str(e))
         
         # Test 2: Get current user without authentication
         try:
