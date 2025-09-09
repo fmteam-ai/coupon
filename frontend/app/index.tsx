@@ -324,6 +324,25 @@ export default function HomePage() {
                 <Text style={styles.expiryText}>
                   Expires: {new Date(item.discount.expires_at).toLocaleDateString()}
                 </Text>
+                
+                {/* Social Actions */}
+                <View style={styles.socialActions}>
+                  <TouchableOpacity 
+                    style={styles.socialButton}
+                    onPress={() => handleShareDeal(item.discount.id, item.business.name, item.discount.title)}
+                  >
+                    <Ionicons name="share-outline" size={16} color="#007AFF" />
+                    <Text style={styles.socialButtonText}>Share</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.socialButton}
+                    onPress={() => handleViewSocialProof(item.discount.id)}
+                  >
+                    <Ionicons name="people-outline" size={16} color="#34C759" />
+                    <Text style={styles.socialButtonText}>Who Used</Text>
+                  </TouchableOpacity>
+                </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
