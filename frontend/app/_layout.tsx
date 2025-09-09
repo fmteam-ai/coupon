@@ -6,7 +6,8 @@ import { LanguageProvider } from '../contexts/LanguageContext';
 
 export default function RootLayout() {
   return (
-    <Tabs
+    <LanguageProvider>
+      <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#007AFF',
