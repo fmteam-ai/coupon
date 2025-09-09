@@ -103,50 +103,27 @@ export default function MapLocationPicker({
     }
   };
 
-  const handleMapPress = async (event: any) => {
-    if (Platform.OS === 'web') {
-      // On web, we'll use current location or allow manual coordinate entry
-      Alert.alert(
-        'Set Location',
-        'Map interaction is available on mobile devices. Use "Get Current Location" to set your position.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    const { latitude, longitude } = event.nativeEvent.coordinate;
-    
-    try {
-      // Reverse geocode to get address
-      const geocoded = await Location.reverseGeocodeAsync({
-        latitude,
-        longitude,
-      });
-      
-      let address = 'Selected Location';
-      if (geocoded.length > 0) {
-        const location = geocoded[0];
-        address = [
-          location.name,
-          location.street,
-          location.city,
-          location.region,
-          location.country
-        ].filter(Boolean).join(', ');
-      }
-      
-      setSelectedLocation({
-        latitude,
-        longitude,
-        address,
-      });
-    } catch (error) {
-      setSelectedLocation({
-        latitude,
-        longitude,
-        address: 'Selected Location',
-      });
-    }
+  const handleLocationInput = async () => {
+    // For web and when map is not available, allow manual coordinate entry
+    Alert.alert(
+      'Set Location',
+      'Would you like to use your current location or enter coordinates manually?',
+      [
+        {
+          text: 'Use Current Location',
+          onPress: getCurrentLocation
+        },
+        {
+          text: 'Enter Manually',
+          onPress: () => {
+            // For now, we'll use current location
+            // In a full implementation, you could show coordinate input fields
+            getCurrentLocation();
+          }
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
   };
 
   const handleConfirmLocation = () => {
