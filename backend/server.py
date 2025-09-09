@@ -3821,6 +3821,296 @@ async def simulate_pricing_strategy(request: Request, user: User = Depends(requi
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Simulation error: {str(e)}")
 
+# ============================================================================
+# COMPUTER VISION & AR SYSTEM
+# ============================================================================
+
+class ReceiptScanRequest(BaseModel):
+    image_data: str
+    image_format: str = "base64"
+
+class VisualSearchRequest(BaseModel):
+    image_data: str
+    search_context: str = "deals"
+
+@api_router.post("/cv/receipt-scan")
+async def scan_receipt(request: ReceiptScanRequest, user: User = Depends(require_auth)):
+    """Scan receipt image and extract business/transaction data"""
+    try:
+        result = await computer_vision_engine.process_receipt_scan(
+            user_id=user.id,
+            image_data=request.image_data,
+            image_format=request.image_format
+        )
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Receipt scan error: {str(e)}")
+
+@api_router.get("/cv/receipt-history")
+async def get_receipt_history(limit: int = 20, user: User = Depends(require_auth)):
+    """Get user's receipt scan history"""
+    try:
+        history = await computer_vision_engine.get_receipt_history(user.id, limit)
+        return history
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Receipt history error: {str(e)}")
+
+@api_router.get("/cv/ar-businesses")
+async def get_ar_businesses(latitude: float, longitude: float, radius_meters: int = 50):
+    """Get businesses for AR store locator based on GPS coordinates"""
+    try:
+        # Validate coordinates
+        if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
+            raise HTTPException(status_code=400, detail="Invalid GPS coordinates")
+        
+        if radius_meters > 500:  # Limit to 500 meters for performance
+            radius_meters = 500
+        
+        result = await computer_vision_engine.get_ar_businesses(
+            latitude=latitude,
+            longitude=longitude,
+            radius_meters=radius_meters
+        )
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AR businesses error: {str(e)}")
+
+@api_router.post("/cv/visual-search")
+async def visual_search(request: VisualSearchRequest, user: User = Depends(require_auth)):
+    """Perform visual search to find similar products or deals"""
+    try:
+        result = await computer_vision_engine.visual_search_products(
+            user_id=user.id,
+            image_data=request.image_data,
+            search_context=request.search_context
+        )
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Visual search error: {str(e)}")
+
+@api_router.get("/cv/visual-search-history")
+async def get_visual_search_history(limit: int = 20, user: User = Depends(require_auth)):
+    """Get user's visual search history"""
+    try:
+        history = await computer_vision_engine.get_visual_search_history(user.id, limit)
+        return history
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Visual search history error: {str(e)}")
+
+@api_router.get("/cv/ar-calibration")
+async def get_ar_calibration():
+    """Get AR calibration settings and device compatibility info"""
+    try:
+        return {
+            "success": True,
+            "ar_capabilities": {
+                "supports_ar": True,
+                "supports_occlusion": True,
+                "supports_plane_detection": True,
+                "max_markers": 20,
+                "tracking_quality": "high"
+            },
+            "calibration_settings": {
+                "marker_scale_factor": 1.0,
+                "distance_threshold": 500,  # meters
+                "min_marker_size": 0.1,
+                "max_marker_size": 2.0,
+                "update_frequency": 30  # Hz
+            },
+            "performance_settings": {
+                "render_distance": 500,
+                "lod_levels": 3,
+                "shadow_quality": "medium",
+                "texture_quality": "high"
+            },
+            "user_preferences": {
+                "show_distance_labels": True,
+                "show_deal_count": True,
+                "marker_transparency": 0.8,
+                "info_panel_style": "compact"
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AR calibration error: {str(e)}")
+
+@api_router.post("/cv/ar-interaction")
+async def handle_ar_interaction(request: Request, user: User = Depends(require_auth)):
+    """Handle AR marker interactions (tap, hover, etc.)"""
+    try:
+        data = await request.json()
+        interaction_type = data.get("interaction_type")  # tap, hover, long_press
+        business_id = data.get("business_id")
+        marker_position = data.get("marker_position", {})
+        
+        if not business_id:
+            raise HTTPException(status_code=400, detail="Business ID required")
+        
+        # Get business details
+        business = await db.businesses.find_one({"id": business_id})
+        if not business:
+            raise HTTPException(status_code=404, detail="Business not found")
+        
+        # Get active deals
+        deals = await db.discounts.find({
+            "business_id": business_id,
+            "is_active": True,
+            "expires_at": {"$gt": datetime.utcnow()}
+        }).to_list(5)
+        
+        # Log interaction for analytics
+        interaction_log = {
+            "user_id": user.id,
+            "business_id": business_id,
+            "interaction_type": interaction_type,
+            "marker_position": marker_position,
+            "timestamp": datetime.utcnow(),
+            "deals_shown": len(deals)
+        }
+        await db.ar_interactions.insert_one(interaction_log)
+        
+        # Track user behavior for personalization
+        try:
+            from personalization_engine import personalization_engine
+            await personalization_engine.track_user_behavior(
+                user.id, 
+                "ar_interaction", 
+                {"business_id": business_id, "interaction_type": interaction_type}
+            )
+        except Exception as pe:
+            print(f"Personalization tracking error: {pe}")
+        
+        return {
+            "success": True,
+            "interaction_type": interaction_type,
+            "business": {
+                "id": business["id"],
+                "name": business["name"],
+                "category": business["category"],
+                "rating": business.get("rating", 0),
+                "address": business.get("address", "")
+            },
+            "deals": [
+                {
+                    "id": deal["id"],
+                    "title": deal["title"],
+                    "discount_value": deal["discount_value"],
+                    "discount_type": deal["discount_type"],
+                    "expires_at": deal["expires_at"].isoformat()
+                }
+                for deal in deals
+            ],
+            "interaction_response": {
+                "show_info_panel": interaction_type == "tap",
+                "highlight_marker": interaction_type == "hover",
+                "show_directions": interaction_type == "long_press"
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AR interaction error: {str(e)}")
+
+@api_router.get("/cv/analytics/receipt-insights")
+async def get_receipt_analytics(user: User = Depends(require_auth)):
+    """Get analytics insights from user's receipt scanning behavior"""
+    try:
+        # Get user's receipt history
+        receipts = list(db.receipt_scans.find({"user_id": user.id}))
+        
+        if not receipts:
+            return {
+                "success": True,
+                "insights": [],
+                "message": "Start scanning receipts to get personalized insights!"
+            }
+        
+        # Analyze spending patterns
+        total_amount = 0
+        business_spending = {}
+        category_spending = {}
+        monthly_spending = {}
+        
+        for receipt in receipts:
+            extracted_data = receipt.get("extracted_data", {})
+            business_match = receipt.get("business_match", {})
+            amount = extracted_data.get("total_amount", 0)
+            
+            if amount > 0:
+                total_amount += amount
+                
+                # Business spending
+                business_name = business_match.get("name", "Unknown")
+                business_spending[business_name] = business_spending.get(business_name, 0) + amount
+                
+                # Category spending (approximate from business name)
+                category = "General"
+                if any(word in business_name.lower() for word in ["restaurant", "food", "cafe", "pizza"]):
+                    category = "Food & Dining"
+                elif any(word in business_name.lower() for word in ["shop", "store", "market"]):
+                    category = "Retail"
+                elif any(word in business_name.lower() for word in ["gas", "fuel", "station"]):
+                    category = "Transportation"
+                
+                category_spending[category] = category_spending.get(category, 0) + amount
+                
+                # Monthly spending
+                scan_date = receipt["scan_timestamp"]
+                month_key = scan_date.strftime("%Y-%m")
+                monthly_spending[month_key] = monthly_spending.get(month_key, 0) + amount
+        
+        # Generate insights
+        insights = []
+        
+        # Top spending business
+        if business_spending:
+            top_business = max(business_spending.items(), key=lambda x: x[1])
+            insights.append({
+                "type": "top_business",
+                "title": "Your Most Visited Business",
+                "description": f"You've spent ${top_business[1]:.2f} at {top_business[0]}",
+                "recommendation": f"Look for loyalty programs or deals at {top_business[0]}"
+            })
+        
+        # Spending category analysis
+        if category_spending:
+            top_category = max(category_spending.items(), key=lambda x: x[1])
+            insights.append({
+                "type": "spending_category",
+                "title": "Top Spending Category",
+                "description": f"${top_category[1]:.2f} spent on {top_category[0]}",
+                "recommendation": f"Search for more deals in {top_category[0]} category"
+            })
+        
+        # Average transaction
+        if receipts:
+            avg_transaction = total_amount / len(receipts)
+            insights.append({
+                "type": "transaction_pattern",
+                "title": "Transaction Pattern",
+                "description": f"Average transaction: ${avg_transaction:.2f}",
+                "recommendation": "Look for deals matching your spending range"
+            })
+        
+        return {
+            "success": True,
+            "total_receipts_scanned": len(receipts),
+            "total_spending_tracked": round(total_amount, 2),
+            "insights": insights,
+            "spending_breakdown": {
+                "by_business": dict(sorted(business_spending.items(), key=lambda x: x[1], reverse=True)[:5]),
+                "by_category": category_spending,
+                "by_month": monthly_spending
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Receipt analytics error: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
