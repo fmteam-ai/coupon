@@ -232,16 +232,29 @@ export default function BusinessRegisterPage() {
       const result = await response.json();
 
       if (response.ok) {
+        const locationInfo = locationCoordinates ? 
+          `\n📍 Location: ${locationCoordinates.latitude.toFixed(6)}, ${locationCoordinates.longitude.toFixed(6)}` +
+          (locationCoordinates.formattedAddress ? `\n🏠 Address: ${locationCoordinates.formattedAddress}` : '') : '';
+        
         Alert.alert(
-          'Registration Successful!', 
-          `Your business has been registered successfully!\n\n` +
+          '🎉 Registration Successful!', 
+          `Your business "${formData.name}" has been registered successfully!\n\n` +
           `✅ ${result.trial_days}-day free trial activated\n` +
-          `📧 Verification email sent to ${formData.email}\n` +
-          `⏳ Business pending admin approval\n\n` +
-          `Please check your email and verify your business address to complete the setup.`,
+          `📧 Verification email sent to:\n   ${formData.email}\n` +
+          `⏳ Business pending admin approval\n` +
+          `${locationInfo}\n\n` +
+          `📱 Next Steps:\n` +
+          `1. Check your email for verification code\n` +
+          `2. Complete email verification\n` +
+          `3. Wait for admin approval\n\n` +
+          `Thank you for joining DealWiz! 🚀`,
           [
             { 
-              text: 'OK', 
+              text: 'Verify Email Now', 
+              onPress: () => router.push('/business-verify-email') 
+            },
+            { 
+              text: 'Go to Dashboard', 
               onPress: () => router.push('/business-dashboard') 
             }
           ]
