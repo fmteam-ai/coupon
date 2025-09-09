@@ -214,6 +214,7 @@ class Business(BaseModel):
     logo: Optional[str] = None
     is_approved: bool = False
     is_active: bool = True
+    trial_eligible: bool = True  # Track if business is eligible for trial period
     created_at: datetime = Field(default_factory=datetime.utcnow)
     approved_at: Optional[datetime] = None
     rating: float = 0.0
