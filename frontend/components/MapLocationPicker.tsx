@@ -563,4 +563,14 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
   },
+  // Address components styles
+  addressComponents: {
+    marginTop: 8,
+    gap: 4,
+  },
+  addressComponent: {
+    fontSize: 12,
+    color: '#666',
+    lineHeight: 16,
+  },
 });
