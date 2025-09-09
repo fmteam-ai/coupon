@@ -75,6 +75,11 @@ export default function BusinessRegisterPage() {
     }
   };
 
+  const handleCountrySelect = (country: Country) => {
+    setSelectedCountry(country);
+    setFormData(prev => ({ ...prev, country: country.code }));
+  };
+
   const handleRegister = async () => {
     if (!formData.name || !formData.email || !formData.phone || !formData.address || !formData.city) {
       Alert.alert('Error', 'Please fill in all required fields');
