@@ -44,10 +44,15 @@ export default function BusinessRegisterPage() {
     phone: '',
     address: '',
     city: '',
-    country: '',
+    country: 'US',
   });
   const [loading, setLoading] = useState(false);
   const [logoImage, setLogoImage] = useState<string | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<Country | null>({
+    code: 'US',
+    name: 'United States',
+    flag: '🇺🇸'
+  });
 
   const categories = [
     'Restaurant', 'Retail', 'Health & Beauty', 'Services', 
