@@ -414,19 +414,19 @@ export default function BusinessRegisterPage() {
                 <View style={styles.mapHeader}>
                   <Text style={styles.mapTitle}>📍 Confirm Your Location</Text>
                   <Text style={styles.mapSubtitle}>
-                    Drag the pin to your exact business location
+                    Tap the button below to open the map and confirm your exact business location
                   </Text>
                 </View>
                 
-                <View style={styles.mapContainer}>
-                  <MapLocationPicker
-                    onLocationSelect={handleMapLocationSelect}
-                    initialAddress={`${formData.address}, ${formData.city}`}
-                    style={styles.mapPicker}
-                  />
-                </View>
-                
                 <View style={styles.mapActions}>
+                  <TouchableOpacity 
+                    style={styles.mapActionButtonPrimary}
+                    onPress={() => setShowMapModal(true)}
+                  >
+                    <Ionicons name="map" size={16} color="#fff" />
+                    <Text style={styles.mapActionTextPrimary}>Open Map to Select Location</Text>
+                  </TouchableOpacity>
+                  
                   <TouchableOpacity 
                     style={styles.mapActionButton}
                     onPress={getCurrentLocation}
@@ -440,7 +440,7 @@ export default function BusinessRegisterPage() {
                     onPress={() => setShowMapForAddress(false)}
                   >
                     <Ionicons name="close" size={16} color="#666" />
-                    <Text style={[styles.mapActionText, {color: '#666'}]}>Hide Map</Text>
+                    <Text style={[styles.mapActionText, {color: '#666'}]}>Hide Location Picker</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -450,12 +450,16 @@ export default function BusinessRegisterPage() {
                     <Text style={styles.locationConfirmedText}>
                       Location confirmed: {locationCoordinates.latitude.toFixed(6)}, {locationCoordinates.longitude.toFixed(6)}
                     </Text>
+                    {locationCoordinates.address && (
+                      <Text style={styles.locationAddress}>
+                        {locationCoordinates.address}
+                      </Text>
+                    )}
                   </View>
                 )}
               </View>
             )}
-            </View>
-            
+
             {/* Language Selection */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>{t.businessRegistration.preferredLanguage} *</Text>
@@ -465,6 +469,15 @@ export default function BusinessRegisterPage() {
               />
             </View>
           </View>
+
+          {/* Map Modal */}
+          <MapLocationPicker
+            visible={showMapModal}
+            onClose={() => setShowMapModal(false)}
+            onLocationSelected={handleMapLocationSelect}
+            initialLocation={locationCoordinates || undefined}
+            title="Select Your Business Location"
+          />
 
           {/* Terms */}
           <View style={styles.termsSection}>
