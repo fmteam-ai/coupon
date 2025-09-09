@@ -892,9 +892,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 20,
+    color: '#1a1a1a',
+    letterSpacing: 0.3,
+    lineHeight: 30,
   },
   viewOnMapButton: {
     flexDirection: 'row',
