@@ -1319,25 +1319,58 @@ async def get_business(business_id: str):
 
 @api_router.post("/businesses/register")
 async def register_business(business_data: BusinessRegistration, user: User = Depends(require_auth)):
-    existing_business = await db.businesses.find_one({"owner_id": user.id})
-    if existing_business:
-        raise HTTPException(status_code=400, detail="User already has a registered business")
-    business = Business(
-        **business_data.dict(),
-        owner_id=user.id,
-        is_approved=False
-    )
-    await db.businesses.insert_one(business.dict())
-    settings = await db.platform_settings.find_one()
-    trial_days = settings["trial_period_days"] if settings and settings.get("trial_enabled") else 365
-    trial_subscription = BusinessSubscription(
-        business_id=business.id,
-        plan_id="trial",
-        status="trial",
-        trial_end=datetime.utcnow() + timedelta(days=trial_days)
-    )
-    await db.business_subscriptions.insert_one(trial_subscription.dict())
-    return {"success": True, "business_id": business.id, "trial_days": trial_days}
+    """Register new business with enhanced trial abuse prevention"""
+    try:
+        # Check trial eligibility first
+        eligibility = await check_previous_business_existence(business_data.dict(), user.email)
+        
+        business = Business(
+            **business_data.dict(),
+            owner_id=user.id,
+            is_approved=False,  # Requires admin approval
+            trial_eligible=eligibility["trial_eligible"]
+        )
+        
+        await db.businesses.insert_one(business.dict())
+        
+        # Get platform settings for trial period
+        settings = await db.platform_settings.find_one()
+        trial_days = 90  # Fixed 90-day trial period
+        
+        # Create subscription based on eligibility
+        if eligibility["trial_eligible"]:
+            # Create trial subscription
+            trial_subscription = BusinessSubscription(
+                business_id=business.id,
+                plan_id="free",
+                status="trial",
+                trial_end=datetime.utcnow() + timedelta(days=trial_days)
+            )
+            subscription_message = f"New business eligible for {trial_days}-day trial period."
+        else:
+            # Create expired trial subscription (requires immediate payment)
+            trial_subscription = BusinessSubscription(
+                business_id=business.id,
+                plan_id="free", 
+                status="expired_trial",
+                trial_end=datetime.utcnow() - timedelta(days=1)  # Already expired
+            )
+            subscription_message = eligibility["reason"]
+        
+        await db.business_subscriptions.insert_one(trial_subscription.dict())
+        
+        return {
+            "success": True, 
+            "business_id": business.id, 
+            "trial_days": trial_days if eligibility["trial_eligible"] else 0,
+            "trial_eligible": eligibility["trial_eligible"],
+            "message": subscription_message,
+            "requires_admin_approval": True,
+            "upgrade_required": not eligibility["trial_eligible"]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Business registration failed: {str(e)}")
 
 @api_router.get("/businesses/{business_id}/discounts")
 async def get_business_discounts(business_id: str):
