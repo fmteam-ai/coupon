@@ -34,7 +34,11 @@ db = client_db[os.environ['DB_NAME']]
 stripe.api_key = os.environ['STRIPE_SECRET_KEY']
 
 # Emergent LLM client
-llm_client = LlmChat(api_key="sk-emergent-72b22E50527Cf2425C")
+llm_client = LlmChat(
+    api_key="sk-emergent-72b22E50527Cf2425C",
+    session_id="ai_recommendations",
+    system_message="You are an AI shopping assistant that provides personalized deal recommendations based on user preferences and behavior."
+)
 
 # Create the main app without a prefix
 app = FastAPI()
