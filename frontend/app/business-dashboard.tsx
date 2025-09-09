@@ -76,45 +76,124 @@ export default function BusinessDashboardPage() {
     loadDashboardData();
   }, []);
 
-  const loadDashboardData = async () => {
+  const fetchData = async () => {
     try {
-      const token = await AsyncStorage.getItem('session_token');
+      const token = await AsyncStorage.getItem('auth_token');
       if (!token) {
-        router.push('/');
+        router.push('/login');
         return;
       }
 
-      // Load subscription status
-      const subscriptionResponse = await fetch(`${EXPO_BACKEND_URL}/api/subscription/status`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const [subscriptionResponse, analyticsResponse, plansResponse] = await Promise.all([
+        fetch(`${EXPO_BACKEND_URL}/api/business/subscription/status`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${EXPO_BACKEND_URL}/api/business/usage-analytics`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${EXPO_BACKEND_URL}/api/subscription-plans`)
+      ]);
 
       if (subscriptionResponse.ok) {
         const subscriptionData = await subscriptionResponse.json();
         setSubscriptionStatus(subscriptionData);
       }
 
-      // Load analytics
-      const analyticsResponse = await fetch(`${EXPO_BACKEND_URL}/api/business/analytics`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
       if (analyticsResponse.ok) {
         const analyticsData = await analyticsResponse.json();
-        setAnalytics(analyticsData);
+        setUsageAnalytics(analyticsData);
+      }
+
+      if (plansResponse.ok) {
+        const plansData = await plansResponse.json();
+        setAvailablePlans(plansData);
       }
 
     } catch (error) {
-      console.error('Dashboard error:', error);
+      console.error('Error fetching data:', error);
       Alert.alert('Error', 'Failed to load dashboard data');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const handleUpgradeSubscription = async (planId: string) => {
+    if (!planId) return;
+    
+    setUpgrading(true);
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const response = await fetch(`${EXPO_BACKEND_URL}/api/business/subscription/upgrade`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ plan_id: planId })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        Alert.alert(
+          'Success!', 
+          `Successfully upgraded to ${result.plan.name}! Your new subscription is active immediately.`,
+          [{ text: 'OK', onPress: () => {
+            setUpgradeModalVisible(false);
+            fetchData(); // Refresh data
+          }}]
+        );
+      } else {
+        const error = await response.json();
+        Alert.alert('Upgrade Failed', error.detail || 'Failed to upgrade subscription');
+      }
+    } catch (error) {
+      console.error('Error upgrading subscription:', error);
+      Alert.alert('Error', 'Failed to upgrade subscription');
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    Alert.alert(
+      'Cancel Subscription',
+      'Are you sure you want to cancel your subscription? You will continue to have access until the end of your current billing period.',
+      [
+        { text: 'Keep Subscription', style: 'cancel' },
+        {
+          text: 'Cancel Subscription',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await AsyncStorage.getItem('auth_token');
+              if (!token) return;
+
+              const response = await fetch(`${EXPO_BACKEND_URL}/api/business/subscription/cancel`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` }
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                Alert.alert('Subscription Cancelled', result.message);
+                fetchData(); // Refresh data
+              } else {
+                const error = await response.json();
+                Alert.alert('Error', error.detail || 'Failed to cancel subscription');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to cancel subscription');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const onRefresh = () => {
