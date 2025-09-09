@@ -199,6 +199,13 @@ export default function RootLayout() {
       />
       
       <Tabs.Screen
+        name="business-verify-email"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      
+      <Tabs.Screen
         name="admin-businesses"
         options={{
           href: null, // Hide from tab bar
