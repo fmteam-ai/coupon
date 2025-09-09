@@ -20,7 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { CountrySelector } from '../components/CountryPicker';
 import { LanguageSelector } from '../components/LanguagePicker';
-import { MapLocationPicker } from '../components/MapLocationPicker';
+import MapLocationPicker from '../components/MapLocationPicker';
 import { useTranslation, useRTLStyle } from '../contexts/LanguageContext';
 import { Country } from '../utils/countries';
 import { Language } from '../utils/languages';
