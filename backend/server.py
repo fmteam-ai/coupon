@@ -198,22 +198,35 @@ class UserPreference(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 # Enhanced Business Models
+# Enhanced Business Model with Admin Controls
 class Business(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
-    description: str
-    category: str
-    owner_id: str
-    email: EmailStr
+    email: str
     phone: str
     address: str
     city: str
-    country: str
+    state: str
+    zip_code: str
+    country: str = "US"
+    category: str
+    description: str
+    website: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    # New precise location fields for map picker
+    precise_latitude: Optional[float] = None
+    precise_longitude: Optional[float] = None
+    location_verified_by_map: bool = False
+    owner_id: str
     logo: Optional[str] = None
     is_approved: bool = False
     is_active: bool = True
+    # Admin control fields
+    is_suspended: bool = False
+    suspension_reason: Optional[str] = None
+    suspended_at: Optional[datetime] = None
+    suspended_by: Optional[str] = None  # Admin user ID
     trial_eligible: bool = True  # Track if business is eligible for trial period
     created_at: datetime = Field(default_factory=datetime.utcnow)
     approved_at: Optional[datetime] = None
@@ -223,11 +236,10 @@ class Business(BaseModel):
     stripe_customer_id: Optional[str] = None
     # Advanced Analytics
     total_revenue_generated: float = 0.0
-    total_customers_acquired: int = 0
-    avg_customer_spend: float = 0.0
-    peak_hours: Dict[str, int] = {}
-    popular_deals: List[str] = []
+    avg_customer_value: float = 0.0
     customer_retention_rate: float = 0.0
+    total_customers_served: int = 0
+    conversion_rate: float = 0.0
 
 class BusinessAnalytics(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
