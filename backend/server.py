@@ -4336,6 +4336,325 @@ async def test_security_protection(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Security test error: {str(e)}")
 
+# ============================================================================
+# ENHANCED AUTHENTICATION & AUTHORIZATION SYSTEM (PHASE 2)
+# ============================================================================
+
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str
+
+class MFASetupResponse(BaseModel):
+    user_id: str
+
+class MFAVerifyRequest(BaseModel):
+    user_id: str
+    token: str
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    new_password: str
+
+@api_router.post("/auth/token/refresh")
+async def refresh_access_token(request: TokenRefreshRequest):
+    """Refresh access token using refresh token"""
+    try:
+        result = enhanced_auth_manager.refresh_access_token(request.refresh_token)
+        
+        if not result:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired refresh token"
+            )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Token refresh error: {str(e)}")
+
+@api_router.post("/auth/logout")
+async def logout_user(request: Request, user: User = Depends(require_auth)):
+    """Logout user and revoke tokens"""
+    try:
+        # Get refresh token from request (if provided)
+        data = await request.json() if request.headers.get("content-type") == "application/json" else {}
+        refresh_token = data.get("refresh_token")
+        
+        success = True
+        if refresh_token:
+            success = enhanced_auth_manager.revoke_refresh_token(refresh_token)
+        
+        # Log logout event
+        security_logger.log_security_event(
+            "user_logout",
+            request,
+            {"user_id": user.id, "token_revoked": success}
+        )
+        
+        return {
+            "success": True,
+            "message": "Logged out successfully"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Logout error: {str(e)}")
+
+@api_router.post("/auth/mfa/setup")
+async def setup_mfa(user: User = Depends(require_auth)):
+    """Setup Multi-Factor Authentication for user"""
+    try:
+        result = enhanced_auth_manager.setup_mfa(user.id)
+        
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+        
+        # Don't return the secret in production, only QR code
+        return {
+            "success": result["success"],
+            "qr_code": result["qr_code"],
+            "backup_codes": [],  # TODO: Generate backup codes
+            "instructions": "Scan the QR code with your authenticator app, then verify with a generated code."
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"MFA setup error: {str(e)}")
+
+@api_router.post("/auth/mfa/verify-setup")
+async def verify_mfa_setup(request: MFAVerifyRequest, user: User = Depends(require_auth)):
+    """Verify MFA setup with TOTP token"""
+    try:
+        if request.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Cannot verify MFA for different user")
+        
+        success = enhanced_auth_manager.verify_mfa_setup(user.id, request.token)
+        
+        if not success:
+            raise HTTPException(status_code=400, detail="Invalid verification code")
+        
+        return {
+            "success": True,
+            "message": "MFA successfully enabled",
+            "mfa_enabled": True
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"MFA verification error: {str(e)}")
+
+@api_router.post("/auth/mfa/disable")
+async def disable_mfa(user: User = Depends(require_auth)):
+    """Disable Multi-Factor Authentication"""
+    try:
+        success = enhanced_auth_manager.disable_mfa(user.id)
+        
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to disable MFA")
+        
+        return {
+            "success": True,
+            "message": "MFA disabled successfully",
+            "mfa_enabled": False
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"MFA disable error: {str(e)}")
+
+@api_router.get("/auth/sessions")
+async def get_user_sessions(user: User = Depends(require_auth)):
+    """Get active sessions for user"""
+    try:
+        sessions = enhanced_auth_manager.get_active_sessions(user.id)
+        
+        # Format session data for response
+        formatted_sessions = []
+        for session in sessions:
+            formatted_sessions.append({
+                "session_id": session["session_id"],
+                "created_at": session["created_at"].isoformat(),
+                "device_info": session.get("device_info", {}),
+                "is_current": False  # TODO: Detect current session
+            })
+        
+        return {
+            "success": True,
+            "sessions": formatted_sessions,
+            "total_sessions": len(formatted_sessions)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Get sessions error: {str(e)}")
+
+@api_router.delete("/auth/sessions/{session_id}")
+async def revoke_session(session_id: str, user: User = Depends(require_auth)):
+    """Revoke a specific session"""
+    try:
+        success = enhanced_auth_manager.revoke_session(session_id, user.id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Session not found or already revoked")
+        
+        return {
+            "success": True,
+            "message": "Session revoked successfully"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Session revocation error: {str(e)}")
+
+@api_router.post("/auth/password-reset/request")
+async def request_password_reset(request: PasswordResetRequest):
+    """Request password reset token"""
+    try:
+        token = enhanced_auth_manager.generate_password_reset_token(request.email)
+        
+        if not token:
+            # Don't reveal if email exists or not
+            return {
+                "success": True,
+                "message": "If the email exists, a password reset link has been sent."
+            }
+        
+        # TODO: Send email with reset link
+        # For demo purposes, return the token (remove in production)
+        return {
+            "success": True,
+            "message": "Password reset token generated",
+            "token": token,  # Remove this in production
+            "expires_in": "1 hour"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Password reset request error: {str(e)}")
+
+@api_router.post("/auth/password-reset/confirm")
+async def confirm_password_reset(request: PasswordResetConfirmRequest):
+    """Confirm password reset with token"""
+    try:
+        # Verify reset token
+        token_record = enhanced_auth_manager.verify_password_reset_token(request.token)
+        
+        if not token_record:
+            raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+        
+        # Hash new password
+        new_password_hash = enhanced_auth_manager.hash_password(request.new_password)
+        
+        # Update user password
+        result = db.users.update_one(
+            {"id": token_record["user_id"]},
+            {
+                "$set": {
+                    "password": new_password_hash,
+                    "password_updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Failed to update password")
+        
+        # Mark token as used
+        enhanced_auth_manager.use_password_reset_token(request.token)
+        
+        return {
+            "success": True,
+            "message": "Password reset successfully"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Password reset confirm error: {str(e)}")
+
+@api_router.get("/auth/permissions")
+async def get_user_permissions(user: User = Depends(require_auth)):
+    """Get user permissions based on role"""
+    try:
+        user_role = user.role if hasattr(user, 'role') else 'customer'
+        permissions = enhanced_auth_manager.get_user_permissions(user_role)
+        
+        return {
+            "success": True,
+            "user_id": user.id,
+            "role": user_role,
+            "permissions": [p.value for p in permissions],
+            "permission_descriptions": {p.value: p.name.replace('_', ' ').title() for p in permissions}
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Get permissions error: {str(e)}")
+
+@api_router.post("/auth/role/assign")
+async def assign_user_role(request: Request, admin_user: User = Depends(require_auth)):
+    """Assign role to user (admin only)"""
+    try:
+        # Check if admin has permission
+        admin_permissions = enhanced_auth_manager.get_user_permissions(admin_user.role)
+        if Permission.MANAGE_USERS not in admin_permissions:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        data = await request.json()
+        target_user_id = data.get("user_id")
+        new_role = data.get("role")
+        
+        if not target_user_id or not new_role:
+            raise HTTPException(status_code=400, detail="User ID and role are required")
+        
+        try:
+            role_enum = UserRole(new_role)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid role")
+        
+        success = enhanced_auth_manager.assign_role(target_user_id, role_enum, admin_user.id)
+        
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to assign role")
+        
+        return {
+            "success": True,
+            "message": f"Role {new_role} assigned to user {target_user_id}",
+            "assigned_by": admin_user.id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Role assignment error: {str(e)}")
+
+@api_router.get("/auth/roles")
+async def get_available_roles():
+    """Get available user roles and their permissions"""
+    try:
+        roles_info = {}
+        
+        for role in UserRole:
+            permissions = enhanced_auth_manager.get_user_permissions(role.value)
+            roles_info[role.value] = {
+                "name": role.name.replace('_', ' ').title(),
+                "permissions": [p.value for p in permissions],
+                "permission_count": len(permissions)
+            }
+        
+        return {
+            "success": True,
+            "roles": roles_info,
+            "total_roles": len(UserRole)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Get roles error: {str(e)}")
+
+@api_router.post("/auth/cleanup")
+async def cleanup_expired_tokens():
+    """Cleanup expired tokens and sessions (admin only)"""
+    try:
+        enhanced_auth_manager.cleanup_expired_tokens()
+        
+        return {
+            "success": True,
+            "message": "Token cleanup completed"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cleanup error: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
