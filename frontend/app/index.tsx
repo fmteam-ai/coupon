@@ -313,7 +313,13 @@ export default function HomePage() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.logo}>CouponApp</Text>
+          <View style={styles.logoContainer}>
+            <View style={styles.logoIcon}>
+              <Text style={styles.logoSymbol}>💎</Text>
+            </View>
+            <Text style={styles.appName}>DealWiz</Text>
+            <Text style={styles.tagline}>Smart Savings</Text>
+          </View>
           {user ? (
             <View style={styles.userSection}>
               <Text style={styles.userName}>Hi, {user.name}!</Text>
