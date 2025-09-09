@@ -37,6 +37,10 @@ class BackendTester:
             'business_analytics': {'passed': 0, 'failed': 0, 'errors': []},
             'dynamic_pricing': {'passed': 0, 'failed': 0, 'errors': []},
             'computer_vision_ar': {'passed': 0, 'failed': 0, 'errors': []},
+            'phase1_api_security': {'passed': 0, 'failed': 0, 'errors': []},
+            'phase2_enhanced_auth': {'passed': 0, 'failed': 0, 'errors': []},
+            'phase3_data_protection': {'passed': 0, 'failed': 0, 'errors': []},
+            'phase4_mobile_security': {'passed': 0, 'failed': 0, 'errors': []},
         }
         self.session_token = None
         self.test_user_id = None
