@@ -78,11 +78,72 @@ export default function MapLocationPicker({
       const { status } = await Location.requestForegroundPermissionsAsync();
       setLocationPermission(status === 'granted');
       
-      if (status === 'granted' && !initialLocation) {
+      if (status === 'granted' && !initialLocation && !initialAddress) {
         getCurrentLocation();
       }
     } catch (error) {
       console.error('Location permission error:', error);
+    }
+  };
+
+  const geocodeAddress = async (address: string) => {
+    if (!address || address.length < 5) return;
+    
+    try {
+      setGeocodingAddress(true);
+      const geocoded = await Location.geocodeAsync(address);
+      
+      if (geocoded.length > 0) {
+        const location = geocoded[0];
+        const newRegion = {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
+        
+        setRegion(newRegion);
+        
+        // Reverse geocode to get detailed address components
+        const reverseGeocoded = await Location.reverseGeocodeAsync({
+          latitude: location.latitude,
+          longitude: location.longitude,
+        });
+        
+        if (reverseGeocoded.length > 0) {
+          const addr = reverseGeocoded[0];
+          const locationData: LocationData = {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            address: addr.street || '',
+            city: addr.city || '',
+            postalCode: addr.postalCode || '',
+            state: addr.region || '',
+            country: addr.country || '',
+            formattedAddress: [
+              addr.name,
+              addr.street,
+              addr.city,
+              addr.region,
+              addr.postalCode,
+              addr.country
+            ].filter(Boolean).join(', ')
+          };
+          
+          setSelectedLocation(locationData);
+        } else {
+          setSelectedLocation({
+            latitude: location.latitude,
+            longitude: location.longitude,
+            formattedAddress: address
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      Alert.alert('Geocoding Error', 'Could not find the specified address');
+    } finally {
+      setGeocodingAddress(false);
     }
   };
 
