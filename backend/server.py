@@ -2686,6 +2686,674 @@ async def perform_business_action(action_data: BusinessAction, admin_user: User 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to perform action: {str(e)}")
 
+# ============================================================================
+# SOCIAL COMMERCE FEATURES SYSTEM
+# ============================================================================
+
+class Friend(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    friend_user_id: str
+    friend_name: str
+    friend_email: str
+    status: str = "pending"  # pending, accepted, blocked
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    accepted_at: Optional[datetime] = None
+
+class SocialShare(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    discount_id: str
+    business_id: str
+    share_type: str = "link"  # link, social_media, direct_message
+    share_platform: Optional[str] = None  # facebook, twitter, whatsapp, etc
+    share_message: Optional[str] = None
+    clicks: int = 0
+    conversions: int = 0  # How many people used the deal
+    points_earned: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class SocialActivity(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    activity_type: str  # deal_used, deal_shared, friend_added, achievement_earned, review_posted
+    target_id: str  # discount_id, business_id, friend_id, etc
+    target_type: str  # discount, business, friend, achievement
+    activity_data: dict = {}  # Additional context data
+    points_earned: int = 0
+    is_public: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class SocialChallenge(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    description: str
+    challenge_type: str  # monthly, weekly, group, individual
+    requirements: dict  # {"deals_used": 5, "friends_referred": 2}
+    rewards: dict  # {"points": 500, "badge": "social_butterfly"}
+    start_date: datetime
+    end_date: datetime
+    max_participants: Optional[int] = None
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class SocialChallengeParticipation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    challenge_id: str
+    user_id: str
+    progress: dict = {}  # Track progress towards requirements
+    completed: bool = False
+    completed_at: Optional[datetime] = None
+    rewards_claimed: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class GroupDeal(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    discount_id: str
+    business_id: str
+    creator_user_id: str
+    title: str
+    description: str
+    min_participants: int = 2
+    max_participants: int = 10
+    current_participants: int = 0
+    group_discount_percentage: float = 0.0  # Additional discount for group
+    expires_at: datetime
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class GroupDealParticipation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    group_deal_id: str
+    user_id: str
+    status: str = "joined"  # joined, completed, cancelled
+    joined_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
+
+# Friend System Endpoints
+
+@api_router.post("/social/friends/add")
+async def add_friend(friend_email: str, user: User = Depends(require_auth)):
+    """Add a friend by email address"""
+    try:
+        # Find the friend user
+        friend_user = await db.users.find_one({"email": friend_email})
+        if not friend_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if friend_user["id"] == user.id:
+            raise HTTPException(status_code=400, detail="Cannot add yourself as friend")
+        
+        # Check if friendship already exists
+        existing_friendship = await db.friends.find_one({
+            "$or": [
+                {"user_id": user.id, "friend_user_id": friend_user["id"]},
+                {"user_id": friend_user["id"], "friend_user_id": user.id}
+            ]
+        })
+        
+        if existing_friendship:
+            raise HTTPException(status_code=400, detail="Friendship already exists")
+        
+        # Create friendship (both directions)
+        friendship1 = Friend(
+            user_id=user.id,
+            friend_user_id=friend_user["id"],
+            friend_name=friend_user["name"],
+            friend_email=friend_user["email"],
+            status="accepted"  # Auto-accept for now, can add approval later
+        )
+        
+        friendship2 = Friend(
+            user_id=friend_user["id"],
+            friend_user_id=user.id,
+            friend_name=user.name,
+            friend_email=user.email,
+            status="accepted"
+        )
+        
+        await db.friends.insert_many([friendship1.dict(), friendship2.dict()])
+        
+        # Award points for adding friends
+        await award_points(user.id, 25, "friend_added", friendship1.id)
+        await award_points(friend_user["id"], 25, "friend_added", friendship2.id)
+        
+        # Create social activity
+        activity = SocialActivity(
+            user_id=user.id,
+            activity_type="friend_added",
+            target_id=friend_user["id"],
+            target_type="friend",
+            activity_data={"friend_name": friend_user["name"]},
+            points_earned=25
+        )
+        await db.social_activities.insert_one(activity.dict())
+        
+        return {
+            "success": True,
+            "message": f"Added {friend_user['name']} as friend",
+            "points_earned": 25
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add friend: {str(e)}")
+
+@api_router.get("/social/friends")
+async def get_friends(user: User = Depends(require_auth)):
+    """Get user's friend list"""
+    try:
+        friends = await db.friends.find({"user_id": user.id, "status": "accepted"}).to_list(1000)
+        
+        # Get friend details and recent activity
+        friend_list = []
+        for friend in friends:
+            # Get recent activity for this friend
+            recent_activity = await db.social_activities.find({
+                "user_id": friend["friend_user_id"],
+                "is_public": True
+            }).sort("created_at", -1).limit(3).to_list(3)
+            
+            friend_list.append({
+                "friend_id": friend["friend_user_id"],
+                "name": friend["friend_name"],
+                "email": friend["friend_email"],
+                "added_at": friend["created_at"],
+                "recent_activity": recent_activity
+            })
+        
+        return {"friends": friend_list, "total_friends": len(friend_list)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get friends: {str(e)}")
+
+# Social Sharing System
+
+@api_router.post("/social/share-deal")
+async def share_deal(discount_id: str, share_type: str, share_platform: Optional[str] = None, user: User = Depends(require_auth)):
+    """Share a deal and earn points when friends use it"""
+    try:
+        # Get discount details
+        discount = await db.discounts.find_one({"id": discount_id})
+        if not discount:
+            raise HTTPException(status_code=404, detail="Discount not found")
+        
+        # Create share record
+        share = SocialShare(
+            user_id=user.id,
+            discount_id=discount_id,
+            business_id=discount["business_id"],
+            share_type=share_type,
+            share_platform=share_platform,
+            points_earned=10  # Base points for sharing
+        )
+        await db.social_shares.insert_one(share.dict())
+        
+        # Award immediate points for sharing
+        await award_points(user.id, 10, "deal_shared", share.id)
+        
+        # Create social activity
+        business = await db.businesses.find_one({"id": discount["business_id"]})
+        activity = SocialActivity(
+            user_id=user.id,
+            activity_type="deal_shared",
+            target_id=discount_id,
+            target_type="discount",
+            activity_data={
+                "discount_title": discount["title"],
+                "business_name": business["name"] if business else "Unknown",
+                "share_platform": share_platform
+            },
+            points_earned=10
+        )
+        await db.social_activities.insert_one(activity.dict())
+        
+        # Generate shareable link
+        share_link = f"https://couponapp.com/deals/{discount_id}?ref={user.id}&share={share.id}"
+        
+        return {
+            "success": True,
+            "share_id": share.id,
+            "share_link": share_link,
+            "points_earned": 10,
+            "message": "Deal shared! You'll earn bonus points when friends use this deal."
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to share deal: {str(e)}")
+
+@api_router.post("/social/track-share-conversion")
+async def track_share_conversion(share_id: str, user: User = Depends(require_auth)):
+    """Track when someone uses a shared deal"""
+    try:
+        # Find the share record
+        share = await db.social_shares.find_one({"id": share_id})
+        if not share:
+            return {"success": False, "message": "Share not found"}
+        
+        # Don't track if user is sharing with themselves
+        if share["user_id"] == user.id:
+            return {"success": False, "message": "Cannot use your own shared deal"}
+        
+        # Update share statistics
+        await db.social_shares.update_one(
+            {"id": share_id},
+            {"$inc": {"conversions": 1}}
+        )
+        
+        # Award bonus points to the sharer
+        bonus_points = 50  # Bonus for successful referral
+        await award_points(share["user_id"], bonus_points, "share_conversion", share_id)
+        
+        # Create activity for the sharer
+        discount = await db.discounts.find_one({"id": share["discount_id"]})
+        activity = SocialActivity(
+            user_id=share["user_id"],
+            activity_type="share_conversion",
+            target_id=share["discount_id"],
+            target_type="discount",
+            activity_data={
+                "discount_title": discount["title"] if discount else "Deal",
+                "converter_name": user.name,
+                "bonus_points": bonus_points
+            },
+            points_earned=bonus_points
+        )
+        await db.social_activities.insert_one(activity.dict())
+        
+        return {
+            "success": True,
+            "message": f"Conversion tracked! {share['user_id']} earned {bonus_points} bonus points."
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to track conversion: {str(e)}")
+
+# Social Feed and Activity
+
+@api_router.get("/social/feed")
+async def get_social_feed(page: int = 1, limit: int = 20, user: User = Depends(require_auth)):
+    """Get social activity feed from friends"""
+    try:
+        # Get user's friends
+        friends = await db.friends.find({"user_id": user.id, "status": "accepted"}).to_list(1000)
+        friend_ids = [friend["friend_user_id"] for friend in friends]
+        friend_ids.append(user.id)  # Include own activities
+        
+        # Get social activities from friends
+        skip = (page - 1) * limit
+        activities = await db.social_activities.find({
+            "user_id": {"$in": friend_ids},
+            "is_public": True
+        }).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+        
+        # Enrich activities with user and target details
+        enriched_activities = []
+        for activity in activities:
+            # Get user info
+            activity_user = await db.users.find_one({"id": activity["user_id"]})
+            
+            # Get target details based on type
+            target_details = {}
+            if activity["target_type"] == "discount":
+                discount = await db.discounts.find_one({"id": activity["target_id"]})
+                if discount:
+                    business = await db.businesses.find_one({"id": discount["business_id"]})
+                    target_details = {
+                        "discount_title": discount["title"],
+                        "business_name": business["name"] if business else "Unknown"
+                    }
+            elif activity["target_type"] == "business":
+                business = await db.businesses.find_one({"id": activity["target_id"]})
+                if business:
+                    target_details = {"business_name": business["name"]}
+            
+            enriched_activities.append({
+                "id": activity["id"],
+                "activity_type": activity["activity_type"],
+                "user_name": activity_user["name"] if activity_user else "Unknown",
+                "user_id": activity["user_id"],
+                "points_earned": activity["points_earned"],
+                "created_at": activity["created_at"],
+                "activity_data": activity["activity_data"],
+                "target_details": target_details,
+                "is_friend": activity["user_id"] != user.id
+            })
+        
+        return {
+            "activities": enriched_activities,
+            "page": page,
+            "limit": limit,
+            "has_more": len(activities) == limit
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get social feed: {str(e)}")
+
+# Social Proof Integration
+
+@api_router.get("/social/deal-popularity/{discount_id}")
+async def get_deal_popularity(discount_id: str, user: User = Depends(require_auth)):
+    """Get social proof data for a deal"""
+    try:
+        # Get recent usage count
+        recent_usage = await db.social_activities.count_documents({
+            "target_id": discount_id,
+            "target_type": "discount",
+            "activity_type": "deal_used",
+            "created_at": {"$gte": (datetime.utcnow() - timedelta(days=7)).isoformat()}
+        })
+        
+        # Get friend usage
+        friends = await db.friends.find({"user_id": user.id, "status": "accepted"}).to_list(1000)
+        friend_ids = [friend["friend_user_id"] for friend in friends]
+        
+        friend_usage = await db.social_activities.find({
+            "user_id": {"$in": friend_ids},
+            "target_id": discount_id,
+            "target_type": "discount",
+            "activity_type": "deal_used"
+        }).to_list(100)
+        
+        # Get recent reviews from friends
+        friend_reviews = await db.business_ratings.find({
+            "user_id": {"$in": friend_ids},
+            "created_at": {"$gte": (datetime.utcnow() - timedelta(days=30)).isoformat()}
+        }).limit(3).to_list(3)
+        
+        return {
+            "recent_usage_count": recent_usage,
+            "friends_used_count": len(friend_usage),
+            "friends_who_used": [
+                {
+                    "name": next((f["friend_name"] for f in friends if f["friend_user_id"] == usage["user_id"]), "Friend"),
+                    "used_at": usage["created_at"]
+                }
+                for usage in friend_usage[:5]  # Show up to 5 friends
+            ],
+            "friend_reviews": [
+                {
+                    "user_name": next((f["friend_name"] for f in friends if f["friend_user_id"] == review["user_id"]), "Friend"),
+                    "rating": review["rating"],
+                    "comment": review.get("comment", ""),
+                    "created_at": review["created_at"]
+                }
+                for review in friend_reviews
+            ]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get deal popularity: {str(e)}")
+
+# Social Challenges System
+
+@api_router.get("/social/challenges")
+async def get_active_challenges(user: User = Depends(require_auth)):
+    """Get active social challenges"""
+    try:
+        now = datetime.utcnow()
+        challenges = await db.social_challenges.find({
+            "is_active": True,
+            "start_date": {"$lte": now.isoformat()},
+            "end_date": {"$gte": now.isoformat()}
+        }).to_list(100)
+        
+        # Get user's participation status for each challenge
+        challenge_list = []
+        for challenge in challenges:
+            participation = await db.social_challenge_participations.find_one({
+                "challenge_id": challenge["id"],
+                "user_id": user.id
+            })
+            
+            challenge_list.append({
+                "id": challenge["id"],
+                "title": challenge["title"],
+                "description": challenge["description"],
+                "challenge_type": challenge["challenge_type"],
+                "requirements": challenge["requirements"],
+                "rewards": challenge["rewards"],
+                "end_date": challenge["end_date"],
+                "is_participating": participation is not None,
+                "progress": participation["progress"] if participation else {},
+                "completed": participation["completed"] if participation else False
+            })
+        
+        return {"challenges": challenge_list}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get challenges: {str(e)}")
+
+@api_router.post("/social/challenges/{challenge_id}/join")
+async def join_challenge(challenge_id: str, user: User = Depends(require_auth)):
+    """Join a social challenge"""
+    try:
+        challenge = await db.social_challenges.find_one({"id": challenge_id})
+        if not challenge:
+            raise HTTPException(status_code=404, detail="Challenge not found")
+        
+        # Check if already participating
+        existing = await db.social_challenge_participations.find_one({
+            "challenge_id": challenge_id,
+            "user_id": user.id
+        })
+        
+        if existing:
+            raise HTTPException(status_code=400, detail="Already participating in this challenge")
+        
+        # Join challenge
+        participation = SocialChallengeParticipation(
+            challenge_id=challenge_id,
+            user_id=user.id
+        )
+        await db.social_challenge_participations.insert_one(participation.dict())
+        
+        return {
+            "success": True,
+            "message": f"Joined challenge: {challenge['title']}",
+            "challenge_id": challenge_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to join challenge: {str(e)}")
+
+# Group Deals System
+
+@api_router.post("/social/group-deals/create")
+async def create_group_deal(
+    discount_id: str, 
+    min_participants: int, 
+    max_participants: int,
+    group_discount_percentage: float,
+    expires_in_hours: int = 24,
+    user: User = Depends(require_auth)
+):
+    """Create a group deal"""
+    try:
+        discount = await db.discounts.find_one({"id": discount_id})
+        if not discount:
+            raise HTTPException(status_code=404, detail="Discount not found")
+        
+        expires_at = datetime.utcnow() + timedelta(hours=expires_in_hours)
+        
+        group_deal = GroupDeal(
+            discount_id=discount_id,
+            business_id=discount["business_id"],
+            creator_user_id=user.id,
+            title=f"Group Deal: {discount['title']}",
+            description=f"Get {group_discount_percentage}% extra off when {min_participants}+ people join!",
+            min_participants=min_participants,
+            max_participants=max_participants,
+            current_participants=1,
+            group_discount_percentage=group_discount_percentage,
+            expires_at=expires_at
+        )
+        
+        await db.group_deals.insert_one(group_deal.dict())
+        
+        # Creator automatically joins
+        participation = GroupDealParticipation(
+            group_deal_id=group_deal.id,
+            user_id=user.id
+        )
+        await db.group_deal_participations.insert_one(participation.dict())
+        
+        return {
+            "success": True,
+            "group_deal_id": group_deal.id,
+            "share_link": f"https://couponapp.com/group-deals/{group_deal.id}",
+            "message": "Group deal created! Share with friends to unlock extra savings."
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create group deal: {str(e)}")
+
+@api_router.post("/social/group-deals/{group_deal_id}/join")
+async def join_group_deal(group_deal_id: str, user: User = Depends(require_auth)):
+    """Join a group deal"""
+    try:
+        group_deal = await db.group_deals.find_one({"id": group_deal_id})
+        if not group_deal:
+            raise HTTPException(status_code=404, detail="Group deal not found")
+        
+        if not group_deal["is_active"]:
+            raise HTTPException(status_code=400, detail="Group deal is no longer active")
+        
+        if datetime.fromisoformat(group_deal["expires_at"]) < datetime.utcnow():
+            raise HTTPException(status_code=400, detail="Group deal has expired")
+        
+        # Check if already joined
+        existing = await db.group_deal_participations.find_one({
+            "group_deal_id": group_deal_id,
+            "user_id": user.id
+        })
+        
+        if existing:
+            raise HTTPException(status_code=400, detail="Already joined this group deal")
+        
+        if group_deal["current_participants"] >= group_deal["max_participants"]:
+            raise HTTPException(status_code=400, detail="Group deal is full")
+        
+        # Join the group deal
+        participation = GroupDealParticipation(
+            group_deal_id=group_deal_id,
+            user_id=user.id
+        )
+        await db.group_deal_participations.insert_one(participation.dict())
+        
+        # Update participant count
+        new_count = group_deal["current_participants"] + 1
+        await db.group_deals.update_one(
+            {"id": group_deal_id},
+            {"$set": {"current_participants": new_count}}
+        )
+        
+        # Check if minimum reached
+        group_activated = new_count >= group_deal["min_participants"]
+        
+        return {
+            "success": True,
+            "current_participants": new_count,
+            "min_participants": group_deal["min_participants"],
+            "group_activated": group_activated,
+            "extra_discount": group_deal["group_discount_percentage"] if group_activated else 0,
+            "message": "Joined group deal!" + (" Group discount unlocked!" if group_activated else f" Need {group_deal['min_participants'] - new_count} more people.")
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to join group deal: {str(e)}")
+
+@api_router.get("/social/group-deals")
+async def get_active_group_deals(user: User = Depends(require_auth)):
+    """Get active group deals"""
+    try:
+        now = datetime.utcnow()
+        group_deals = await db.group_deals.find({
+            "is_active": True,
+            "expires_at": {"$gte": now.isoformat()}
+        }).sort("created_at", -1).to_list(50)
+        
+        # Get user's participation status
+        deals_list = []
+        for deal in group_deals:
+            participation = await db.group_deal_participations.find_one({
+                "group_deal_id": deal["id"],
+                "user_id": user.id
+            })
+            
+            # Get discount and business details
+            discount = await db.discounts.find_one({"id": deal["discount_id"]})
+            business = await db.businesses.find_one({"id": deal["business_id"]}) if discount else None
+            
+            deals_list.append({
+                "id": deal["id"],
+                "title": deal["title"],
+                "description": deal["description"],
+                "current_participants": deal["current_participants"],
+                "min_participants": deal["min_participants"],
+                "max_participants": deal["max_participants"],
+                "group_discount_percentage": deal["group_discount_percentage"],
+                "expires_at": deal["expires_at"],
+                "is_participating": participation is not None,
+                "group_activated": deal["current_participants"] >= deal["min_participants"],
+                "discount_details": {
+                    "title": discount["title"] if discount else "Unknown",
+                    "value": discount["value"] if discount else 0,
+                    "percentage": discount["percentage"] if discount else 0
+                },
+                "business_name": business["name"] if business else "Unknown"
+            })
+        
+        return {"group_deals": deals_list}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get group deals: {str(e)}")
+
+# Helper function for awarding points (update existing rewards system)
+async def award_points(user_id: str, points: int, reason: str, reference_id: str):
+    """Award points to user and update rewards profile"""
+    try:
+        # Update user's rewards profile
+        rewards_profile = await db.user_rewards.find_one({"user_id": user_id})
+        if rewards_profile:
+            new_points = rewards_profile["total_points"] + points
+            await db.user_rewards.update_one(
+                {"user_id": user_id},
+                {"$inc": {"total_points": points}, "$set": {"updated_at": datetime.utcnow().isoformat()}}
+            )
+            
+            # Check for level up
+            new_level = calculate_level(new_points)
+            if new_level > rewards_profile.get("level", 1):
+                await db.user_rewards.update_one(
+                    {"user_id": user_id},
+                    {"$set": {"level": new_level}}
+                )
+                
+                # Award level up bonus
+                level_bonus = new_level * 100
+                await db.user_rewards.update_one(
+                    {"user_id": user_id},
+                    {"$inc": {"total_points": level_bonus}}
+                )
+        
+    except Exception as e:
+        print(f"Error awarding points: {e}")
+
+def calculate_level(points: int) -> int:
+    """Calculate user level based on points"""
+    if points < 100:
+        return 1
+    elif points < 500:
+        return 2
+    elif points < 1500:
+        return 3
+    elif points < 3000:
+        return 4
+    elif points < 5000:
+        return 5
+    else:
+        return min(10, 5 + (points - 5000) // 2000)
+
 # Update existing business registration to use 90-day trial
 async def create_business_with_90_day_trial(business: Business, user_email: str) -> dict:
     """Enhanced business creation with 90-day trial and abuse prevention"""
