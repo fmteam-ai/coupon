@@ -21,6 +21,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import asyncio
 import re
+import bcrypt
+import jwt
 from emergentintegrations.llm.chat import LlmChat
 
 ROOT_DIR = Path(__file__).parent
