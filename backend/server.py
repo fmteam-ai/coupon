@@ -3612,6 +3612,214 @@ async def get_user_insights(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting insights: {str(e)}")
 
+# ============================================================================
+# DYNAMIC PRICING & DEMAND PREDICTION SYSTEM
+# ============================================================================
+
+@api_router.post("/pricing/dynamic-price/{discount_id}")
+async def get_dynamic_price(discount_id: str, user: User = Depends(require_auth)):
+    """Get dynamic pricing for a discount based on demand and user segment"""
+    try:
+        pricing_result = await dynamic_pricing_engine.calculate_dynamic_price(
+            discount_id=discount_id,
+            user_id=user.id
+        )
+        return pricing_result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Pricing calculation error: {str(e)}")
+
+@api_router.post("/pricing/dynamic-price/{discount_id}/anonymous")
+async def get_dynamic_price_anonymous(discount_id: str):
+    """Get dynamic pricing for anonymous users (no personalization)"""
+    try:
+        pricing_result = await dynamic_pricing_engine.calculate_dynamic_price(
+            discount_id=discount_id,
+            user_id=None
+        )
+        return pricing_result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Pricing calculation error: {str(e)}")
+
+@api_router.get("/pricing/demand-prediction/{business_id}")
+async def get_demand_prediction(business_id: str, hours_ahead: int = 24, user: User = Depends(require_business_auth)):
+    """Get demand prediction for the next N hours"""
+    try:
+        # Verify user owns this business
+        business = await db.businesses.find_one({"id": business_id, "owner_id": user.id})
+        if not business:
+            raise HTTPException(status_code=403, detail="Access denied to this business")
+        
+        prediction = await dynamic_pricing_engine.get_demand_prediction(business_id, hours_ahead)
+        return prediction
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Demand prediction error: {str(e)}")
+
+@api_router.get("/pricing/analytics/{business_id}")
+async def get_pricing_analytics(business_id: str, days: int = 7, user: User = Depends(require_business_auth)):
+    """Get comprehensive pricing analytics for a business"""
+    try:
+        # Verify user owns this business
+        business = await db.businesses.find_one({"id": business_id, "owner_id": user.id})
+        if not business:
+            raise HTTPException(status_code=403, detail="Access denied to this business")
+        
+        analytics = await dynamic_pricing_engine.get_pricing_analytics(business_id, days)
+        return analytics
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analytics error: {str(e)}")
+
+@api_router.get("/pricing/personalized")
+async def get_personalized_pricing(discount_ids: str, user: User = Depends(require_auth)):
+    """Get personalized pricing for multiple discounts"""
+    try:
+        # Parse comma-separated discount IDs
+        discount_id_list = [id.strip() for id in discount_ids.split(',') if id.strip()]
+        
+        if not discount_id_list:
+            raise HTTPException(status_code=400, detail="No discount IDs provided")
+        
+        if len(discount_id_list) > 20:
+            raise HTTPException(status_code=400, detail="Maximum 20 discounts per request")
+        
+        pricing_result = await dynamic_pricing_engine.get_personalized_pricing(user.id, discount_id_list)
+        return pricing_result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Personalized pricing error: {str(e)}")
+
+@api_router.get("/pricing/user-segment")
+async def get_user_pricing_segment(user: User = Depends(require_auth)):
+    """Get user's pricing segment information"""
+    try:
+        segment_info = await dynamic_pricing_engine._get_user_segment_info(user.id)
+        return segment_info
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Segment info error: {str(e)}")
+
+@api_router.get("/pricing/market-analysis/{category}")
+async def get_market_pricing_analysis(category: str):
+    """Get market pricing analysis for a category"""
+    try:
+        # Get all active discounts in category
+        businesses = await db.businesses.find({"category": category}).to_list(1000)
+        business_ids = [b["id"] for b in businesses]
+        
+        discounts = await db.discounts.find({
+            "business_id": {"$in": business_ids},
+            "is_active": True,
+            "expires_at": {"$gt": datetime.utcnow()}
+        }).to_list(1000)
+        
+        if not discounts:
+            return {"error": "No active discounts found in this category"}
+        
+        # Calculate market stats
+        discount_values = [d["discount_value"] for d in discounts if d["discount_type"] == "percentage"]
+        fixed_values = [d["discount_value"] for d in discounts if d["discount_type"] == "fixed_amount"]
+        
+        import statistics
+        
+        analysis = {
+            "category": category,
+            "total_active_deals": len(discounts),
+            "percentage_deals": {
+                "count": len(discount_values),
+                "average": round(statistics.mean(discount_values), 1) if discount_values else 0,
+                "median": round(statistics.median(discount_values), 1) if discount_values else 0,
+                "min": min(discount_values) if discount_values else 0,
+                "max": max(discount_values) if discount_values else 0
+            },
+            "fixed_amount_deals": {
+                "count": len(fixed_values),
+                "average": round(statistics.mean(fixed_values), 2) if fixed_values else 0,
+                "median": round(statistics.median(fixed_values), 2) if fixed_values else 0,
+                "min": min(fixed_values) if fixed_values else 0,
+                "max": max(fixed_values) if fixed_values else 0
+            },
+            "businesses_with_deals": len(set(d["business_id"] for d in discounts)),
+            "most_common_discount_ranges": {
+                "low": len([v for v in discount_values if v <= 15]),
+                "medium": len([v for v in discount_values if 15 < v <= 30]),
+                "high": len([v for v in discount_values if v > 30])
+            },
+            "generated_at": datetime.utcnow().isoformat()
+        }
+        
+        return analysis
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Market analysis error: {str(e)}")
+
+@api_router.post("/pricing/simulate")
+async def simulate_pricing_strategy(request: Request, user: User = Depends(require_business_auth)):
+    """Simulate different pricing strategies for a business"""
+    try:
+        data = await request.json()
+        business_id = data.get("business_id")
+        strategy = data.get("strategy", "demand_based")  # demand_based, competitive, time_based
+        parameters = data.get("parameters", {})
+        
+        # Verify user owns this business
+        business = await db.businesses.find_one({"id": business_id, "owner_id": user.id})
+        if not business:
+            raise HTTPException(status_code=403, detail="Access denied to this business")
+        
+        # Get business discounts
+        discounts = await db.discounts.find({"business_id": business_id, "is_active": True}).to_list(100)
+        
+        if not discounts:
+            return {"error": "No active discounts to simulate"}
+        
+        simulations = []
+        
+        for discount in discounts:
+            current_pricing = await dynamic_pricing_engine.calculate_dynamic_price(
+                discount["id"], user_id=None
+            )
+            
+            # Apply different strategy multipliers
+            if strategy == "aggressive":
+                multiplier = 1.3  # 30% more aggressive pricing
+            elif strategy == "conservative":
+                multiplier = 0.8  # 20% more conservative
+            elif strategy == "peak_hours":
+                multiplier = 1.2 if 11 <= datetime.utcnow().hour <= 13 or 17 <= datetime.utcnow().hour <= 19 else 0.9
+            else:
+                multiplier = 1.0  # Current strategy
+            
+            simulated_value = current_pricing.get("dynamic_value", discount["discount_value"]) * multiplier
+            
+            simulations.append({
+                "discount_id": discount["id"],
+                "discount_title": discount["title"],
+                "original_value": discount["discount_value"],
+                "current_dynamic_value": current_pricing.get("dynamic_value", discount["discount_value"]),
+                "simulated_value": round(simulated_value, 2),
+                "estimated_demand_change": (multiplier - 1.0) * -50,  # Rough inverse correlation
+                "confidence": "medium"
+            })
+        
+        return {
+            "business_id": business_id,
+            "strategy": strategy,
+            "parameters": parameters,
+            "simulations": simulations,
+            "summary": {
+                "total_discounts": len(simulations),
+                "average_change": round(((multiplier - 1.0) * 100), 1),
+                "estimated_revenue_impact": f"{((multiplier - 1.0) * 15):+.1f}%"  # Rough estimate
+            },
+            "generated_at": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Simulation error: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
