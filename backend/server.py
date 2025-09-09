@@ -87,6 +87,18 @@ class UserRegistration(BaseModel):
     country: Optional[str] = None
     user_type: str = "customer"
 
+class BusinessRegistration(BaseModel):
+    name: str
+    description: str
+    category: str
+    email: EmailStr
+    phone: str
+    address: str
+    city: str
+    country: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
 class EmailVerification(BaseModel):
     email: EmailStr
     code: str
