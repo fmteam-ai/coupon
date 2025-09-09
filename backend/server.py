@@ -412,6 +412,26 @@ async def send_verification_sms(phone: str, code: str):
     print(f"Verification SMS sent to {phone}: Code {code}")
     return True
 
+async def send_business_verification_email(email: str, code: str, business_name: str):
+    """Send email verification code to business owner"""
+    try:
+        # For development/testing, just print the email
+        print(f"📧 Business Email Verification")
+        print(f"To: {email}")
+        print(f"Business: {business_name}")
+        print(f"Verification Code: {code}")
+        print(f"Subject: Verify your business email for DealWiz")
+        print(f"Content: Please verify your business email by entering this code: {code}")
+        print(f"This code expires in 24 hours.")
+        
+        # In production, you would implement actual email sending here
+        # using SMTP, SendGrid, AWS SES, etc.
+        
+        return True
+    except Exception as e:
+        print(f"Error sending business verification email: {e}")
+        return False
+
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     import math
     lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
