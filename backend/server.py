@@ -20,6 +20,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import asyncio
+import re
 from emergentintegrations.llm.chat import LlmChat
 
 ROOT_DIR = Path(__file__).parent
