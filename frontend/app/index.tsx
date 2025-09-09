@@ -170,7 +170,7 @@ export default function HomePage() {
   };
 
   const handleLogin = () => {
-    const authUrl = `https://demobackend.emergentagent.com/auth/v1/env/oauth?_redirect_uri=${encodeURIComponent('https://couponmobile.preview.emergentagent.com/')}`;
+    const authUrl = `https://demobackend.emergentagent.com/auth/v1/env/oauth?_redirect_uri=${encodeURIComponent('https://dealwiz.preview.emergentagent.com/')}`;
     router.push(authUrl as any);
   };
 
