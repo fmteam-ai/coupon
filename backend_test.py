@@ -1047,6 +1047,16 @@ async def main():
         
         await tester.test_computer_vision_ar_system()
         
+        # Run NEW 4-PHASE SECURITY SYSTEM tests
+        print("\n" + "="*60)
+        print("🔒 TESTING 4-PHASE COMPREHENSIVE SECURITY SYSTEM")
+        print("="*60)
+        
+        await tester.test_phase1_api_security()
+        await tester.test_phase2_enhanced_auth()
+        await tester.test_phase3_data_protection()
+        await tester.test_phase4_mobile_security()
+        
         # Print summary
         success = tester.print_summary()
         
