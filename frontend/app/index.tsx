@@ -708,7 +708,7 @@ export default function HomePage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f8f9fb',
   },
   loadingContainer: {
     flex: 1,
