@@ -25,6 +25,11 @@ interface LocationData {
   latitude: number;
   longitude: number;
   address?: string;
+  city?: string;
+  postalCode?: string;
+  state?: string;
+  country?: string;
+  formattedAddress?: string;
 }
 
 interface MapLocationPickerProps {
