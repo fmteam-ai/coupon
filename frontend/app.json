@@ -1,22 +1,38 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "CouponApp",
+    "slug": "couponapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "couponapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "description": "Discover amazing discounts and deals from local businesses. Earn rewards, get cashback, and enjoy AI-powered recommendations.",
+    "keywords": ["discount", "coupon", "deals", "savings", "cashback", "rewards"],
+    "privacy": "public",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.couponapp.mobile",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app uses location to find nearby businesses and deals.",
+        "NSCameraUsageDescription": "This app uses the camera to scan QR codes for coupon redemption."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000"
+        "backgroundColor": "#007AFF"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.couponapp.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
