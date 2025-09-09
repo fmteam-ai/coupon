@@ -665,12 +665,12 @@ class BackendTester:
                     self.log_result('dynamic_pricing', 'Market analysis with category statistics', True)
                     print(f"   ✓ Market analysis for Restaurant category: {analysis.get('total_active_deals', 0)} deals")
                     print("   ✓ Competitive pricing analysis and market statistics")
+                elif 'error' in analysis and 'No active discounts found' in analysis['error']:
+                    self.log_result('dynamic_pricing', 'Market analysis with category statistics', True)
+                    print("   ✓ Market analysis endpoint working (no data available)")
                 else:
                     self.log_result('dynamic_pricing', 'Market analysis with category statistics', False,
-                                  "Invalid market analysis response structure")
-            elif response.status_code == 500 and "No active discounts found" in response.text:
-                self.log_result('dynamic_pricing', 'Market analysis with category statistics', True)
-                print("   ✓ Market analysis endpoint working (no data available)")
+                                  f"Invalid market analysis response structure: {analysis}")
             else:
                 self.log_result('dynamic_pricing', 'Market analysis with category statistics', False,
                               f"Status: {response.status_code}")
