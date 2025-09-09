@@ -9,9 +9,20 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "description": "Discover amazing discounts and deals from local businesses. Earn rewards, get cashback, and enjoy AI-powered recommendations.",
-    "keywords": ["discount", "coupon", "deals", "savings", "cashback", "rewards"],
+    "keywords": [
+      "discount",
+      "coupon",
+      "deals",
+      "savings",
+      "cashback",
+      "rewards"
+    ],
     "privacy": "public",
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "sdkVersion": "54.0.0",
     "ios": {
       "supportsTablet": true,
@@ -51,7 +62,9 @@
           "resizeMode": "contain",
           "backgroundColor": "#000"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
