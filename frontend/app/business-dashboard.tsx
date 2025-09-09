@@ -327,31 +327,19 @@ export default function BusinessDashboardPage() {
           </View>
         )}
 
-        {/* Recent Activity */}
-        {analytics && analytics.recent_redemptions.length > 0 && (
+        {/* AI Recommendations */}
+        {usageAnalytics && usageAnalytics.recommendations.length > 0 && (
           <View style={styles.activitySection}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
+            <Text style={styles.sectionTitle}>AI Recommendations</Text>
             
-            {analytics.recent_redemptions.map((redemption, index) => (
+            {usageAnalytics.recommendations.map((recommendation, index) => (
               <View key={index} style={styles.activityItem}>
                 <View style={styles.activityIcon}>
-                  <Ionicons name="gift-outline" size={20} color="#007AFF" />
+                  <Ionicons name="bulb-outline" size={20} color="#007AFF" />
                 </View>
                 <View style={styles.activityDetails}>
-                  <Text style={styles.activityTitle}>{redemption.discount_title}</Text>
-                  <Text style={styles.activityUser}>Redeemed by {redemption.user_name}</Text>
-                  <Text style={styles.activityTime}>{formatDate(redemption.used_at)}</Text>
-                </View>
-                <View style={[
-                  styles.statusBadge,
-                  redemption.verification_status === 'verified' ? styles.verifiedBadge : styles.pendingBadge
-                ]}>
-                  <Text style={[
-                    styles.statusBadgeText,
-                    redemption.verification_status === 'verified' ? styles.verifiedText : styles.pendingText
-                  ]}>
-                    {redemption.verification_status}
-                  </Text>
+                  <Text style={styles.activityTitle}>Recommendation {index + 1}</Text>
+                  <Text style={styles.activityUser}>{recommendation}</Text>
                 </View>
               </View>
             ))}
