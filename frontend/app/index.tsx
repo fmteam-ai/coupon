@@ -8,7 +8,8 @@ import {
   Image, 
   TextInput,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Switch
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -48,6 +49,7 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [categories, setCategories] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const { session_id } = useGlobalSearchParams();
 
   const categories_list = [
@@ -172,6 +174,14 @@ export default function HomePage() {
     }
   };
 
+  const handleViewModeToggle = () => {
+    if (viewMode === 'list') {
+      router.push('/map');
+    } else {
+      setViewMode('list');
+    }
+  };
+
   const renderStars = (rating: number) => {
     const stars = [];
     const fullStars = Math.floor(rating);
@@ -226,7 +236,7 @@ export default function HomePage() {
           )}
         </View>
 
-        {/* Search Bar */}
+        {/* Search Bar with Map Toggle */}
         <View style={styles.searchContainer}>
           <Ionicons name="search-outline" size={20} color="#666" style={styles.searchIcon} />
           <TextInput
@@ -236,6 +246,14 @@ export default function HomePage() {
             onChangeText={setSearchQuery}
             placeholderTextColor="#999"
           />
+          <TouchableOpacity onPress={handleViewModeToggle} style={styles.mapToggleButton}>
+            <Ionicons 
+              name="map-outline"
+              size={20} 
+              color="#007AFF" 
+            />
+            <Text style={styles.mapToggleText}>Map</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Category Filter */}
@@ -267,7 +285,13 @@ export default function HomePage() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Featured Discounts */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🔥 Hot Deals</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>🔥 Hot Deals</Text>
+            <TouchableOpacity onPress={() => router.push('/map')} style={styles.viewOnMapButton}>
+              <Ionicons name="map-outline" size={16} color="#007AFF" />
+              <Text style={styles.viewOnMapText}>View on Map</Text>
+            </TouchableOpacity>
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {discounts.slice(0, 5).map((item) => (
               <TouchableOpacity
@@ -307,7 +331,13 @@ export default function HomePage() {
 
         {/* Businesses */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🏪 Businesses</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>🏪 Businesses</Text>
+            <TouchableOpacity onPress={() => router.push('/map')} style={styles.viewOnMapButton}>
+              <Ionicons name="location-outline" size={16} color="#007AFF" />
+              <Text style={styles.viewOnMapText}>Find Near Me</Text>
+            </TouchableOpacity>
+          </View>
           {businesses.map((business) => (
             <TouchableOpacity
               key={business.id}
@@ -443,6 +473,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
+  mapToggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f8ff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  mapToggleText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
+    marginLeft: 4,
+  },
   categoryContainer: {
     flexDirection: 'row',
   },
@@ -470,12 +515,31 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 24,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginHorizontal: 20,
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 16,
-    marginHorizontal: 20,
+  },
+  viewOnMapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f8ff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  viewOnMapText: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '500',
+    marginLeft: 4,
   },
   discountCard: {
     backgroundColor: '#fff',

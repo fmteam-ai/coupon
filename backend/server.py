@@ -112,7 +112,7 @@ class PlatformSettings(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-# Business Models
+# Business Models (Enhanced with Location)
 class Business(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
@@ -124,6 +124,8 @@ class Business(BaseModel):
     address: str
     city: str
     country: str
+    latitude: Optional[float] = None  # GPS coordinates
+    longitude: Optional[float] = None
     logo: Optional[str] = None  # base64 encoded image
     is_approved: bool = False
     is_active: bool = True
@@ -144,7 +146,17 @@ class BusinessRegistration(BaseModel):
     address: str
     city: str
     country: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     logo: Optional[str] = None
+
+# Location Search Models
+class LocationSearch(BaseModel):
+    latitude: float
+    longitude: float
+    radius_km: float = 10.0
+    category: Optional[str] = None
+    search_query: Optional[str] = None
 
 # Enhanced Discount Models
 class Discount(BaseModel):
@@ -223,6 +235,21 @@ async def send_verification_sms(phone: str, code: str):
     # In production, integrate with Twilio, etc.
     print(f"Verification SMS sent to {phone}: Code {code}")
     return True
+
+def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate distance between two points in kilometers using Haversine formula"""
+    import math
+    
+    # Convert latitude and longitude from degrees to radians
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    
+    # Haversine formula
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    c = 2 * math.asin(math.sqrt(a))
+    r = 6371  # Radius of earth in kilometers
+    return c * r
 
 # Authentication Functions
 async def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[User]:
@@ -570,10 +597,16 @@ async def get_subscription_status(user: User = Depends(require_business_auth)):
     
     return status_info
 
-# Business Routes
+# Enhanced Business Routes with Location
 @api_router.get("/businesses")
-async def get_businesses(category: Optional[str] = None, search: Optional[str] = None):
-    """Get all approved businesses"""
+async def get_businesses(
+    category: Optional[str] = None, 
+    search: Optional[str] = None,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    radius_km: Optional[float] = None
+):
+    """Get all approved businesses with optional location filtering"""
     query = {"is_approved": True, "is_active": True}
     
     if category:
@@ -586,7 +619,56 @@ async def get_businesses(category: Optional[str] = None, search: Optional[str] =
         ]
     
     businesses = await db.businesses.find(query).to_list(100)
+    
+    # Apply location filtering if coordinates provided
+    if latitude is not None and longitude is not None and radius_km is not None:
+        filtered_businesses = []
+        for business in businesses:
+            if business.get("latitude") and business.get("longitude"):
+                distance = calculate_distance(
+                    latitude, longitude,
+                    business["latitude"], business["longitude"]
+                )
+                if distance <= radius_km:
+                    business["distance_km"] = round(distance, 2)
+                    filtered_businesses.append(business)
+        businesses = filtered_businesses
+    
     return [Business(**business) for business in businesses]
+
+@api_router.post("/businesses/search-location")
+async def search_businesses_by_location(location_search: LocationSearch):
+    """Search businesses by location"""
+    query = {"is_approved": True, "is_active": True}
+    
+    if location_search.category:
+        query["category"] = location_search.category
+    
+    if location_search.search_query:
+        query["$or"] = [
+            {"name": {"$regex": location_search.search_query, "$options": "i"}},
+            {"description": {"$regex": location_search.search_query, "$options": "i"}}
+        ]
+    
+    # Get all businesses first
+    all_businesses = await db.businesses.find(query).to_list(1000)
+    
+    # Filter by distance
+    nearby_businesses = []
+    for business in all_businesses:
+        if business.get("latitude") and business.get("longitude"):
+            distance = calculate_distance(
+                location_search.latitude, location_search.longitude,
+                business["latitude"], business["longitude"]
+            )
+            if distance <= location_search.radius_km:
+                business["distance_km"] = round(distance, 2)
+                nearby_businesses.append(business)
+    
+    # Sort by distance
+    nearby_businesses.sort(key=lambda x: x["distance_km"])
+    
+    return [Business(**business) for business in nearby_businesses]
 
 @api_router.get("/businesses/{business_id}")
 async def get_business(business_id: str):
@@ -598,7 +680,7 @@ async def get_business(business_id: str):
 
 @api_router.post("/businesses/register")
 async def register_business(business_data: BusinessRegistration, user: User = Depends(require_auth)):
-    """Register a new business"""
+    """Register a new business with location"""
     # Check if user already has a business
     existing_business = await db.businesses.find_one({"owner_id": user.id})
     if existing_business:
@@ -722,8 +804,13 @@ async def redeem_coupon(discount_id: str, redemption: CouponRedemption, user: Us
     }
 
 @api_router.get("/discounts")
-async def get_all_discounts(category: Optional[str] = None):
-    """Get all active discounts"""
+async def get_all_discounts(
+    category: Optional[str] = None,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    radius_km: Optional[float] = None
+):
+    """Get all active discounts with optional location filtering"""
     # Get active discounts with business info
     pipeline = [
         {
@@ -757,10 +844,30 @@ async def get_all_discounts(category: Optional[str] = None):
     for discount in discounts:
         discount_obj = Discount(**{k: v for k, v in discount.items() if k != "business"})
         business_obj = Business(**discount["business"][0]) if discount["business"] else None
-        result.append({
-            "discount": discount_obj.dict(),
-            "business": business_obj.dict() if business_obj else None
-        })
+        
+        # Apply location filtering if coordinates provided
+        if (latitude is not None and longitude is not None and radius_km is not None and 
+            business_obj and business_obj.latitude and business_obj.longitude):
+            distance = calculate_distance(
+                latitude, longitude,
+                business_obj.latitude, business_obj.longitude
+            )
+            if distance <= radius_km:
+                business_dict = business_obj.dict()
+                business_dict["distance_km"] = round(distance, 2)
+                result.append({
+                    "discount": discount_obj.dict(),
+                    "business": business_dict
+                })
+        elif latitude is None:  # No location filtering
+            result.append({
+                "discount": discount_obj.dict(),
+                "business": business_obj.dict() if business_obj else None
+            })
+    
+    # Sort by distance if location provided
+    if latitude is not None and longitude is not None:
+        result.sort(key=lambda x: x["business"].get("distance_km", float('inf')))
     
     return result
 
