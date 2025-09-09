@@ -56,64 +56,6 @@ interface UserLocation {
   longitude: number;
 }
 
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  TextInput,
-  Modal,
-  Dimensions,
-  ScrollView,
-  Platform
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import { getDistance } from 'geolib';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const EXPO_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-const { width, height } = Dimensions.get('window');
-
-interface Business {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  rating: number;
-  review_count: number;
-  logo?: string;
-  latitude?: number;
-  longitude?: number;
-  address: string;
-  city: string;
-  country: string;
-  phone: string;
-}
-
-interface Discount {
-  discount: {
-    id: string;
-    title: string;
-    description: string;
-    discount_type: string;
-    discount_value: number;
-    expires_at: string;
-  };
-  business: Business;
-}
-
-interface UserLocation {
-  latitude: number;
-  longitude: number;
-}
-
 export default function MapPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
