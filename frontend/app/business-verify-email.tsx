@@ -197,6 +197,37 @@ export default function BusinessVerifyEmailPage() {
             We sent a verification code to:
           </Text>
           <Text style={styles.emailAddress}>{status?.email}</Text>
+          
+          {/* Progress Indicator */}
+          <View style={styles.progressSection}>
+            <Text style={styles.progressTitle}>Verification Progress</Text>
+            <View style={styles.progressSteps}>
+              <View style={styles.progressStep}>
+                <Ionicons name="checkmark-circle" size={20} color="#34C759" />
+                <Text style={styles.progressStepText}>Business Registered</Text>
+              </View>
+              <View style={[styles.progressStep, !status?.email_verified && styles.progressStepActive]}>
+                <Ionicons 
+                  name={status?.email_verified ? "checkmark-circle" : "time"} 
+                  size={20} 
+                  color={status?.email_verified ? "#34C759" : "#007AFF"} 
+                />
+                <Text style={[styles.progressStepText, !status?.email_verified && styles.progressStepActiveText]}>
+                  Email Verification
+                </Text>
+              </View>
+              <View style={styles.progressStep}>
+                <Ionicons 
+                  name={status?.is_approved ? "checkmark-circle" : "time"} 
+                  size={20} 
+                  color={status?.is_approved ? "#34C759" : "#ccc"} 
+                />
+                <Text style={[styles.progressStepText, !status?.is_approved && styles.progressStepInactive]}>
+                  Admin Approval
+                </Text>
+              </View>
+            </View>
+          </View>
         </View>
 
         {/* Verification Code Input */}
