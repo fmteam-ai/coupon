@@ -375,17 +375,63 @@ export default function HomePage() {
           ))}
         </View>
 
+        {/* NEW FEATURES - Top Priority Access */}
+        {user && (
+          <View style={styles.newFeaturesSection}>
+            <Text style={styles.newFeaturesTitle}>🚀 New Features</Text>
+            <View style={styles.featuresGrid}>
+              <TouchableOpacity
+                style={styles.featureCard}
+                onPress={() => router.push('/ai-recommendations')}
+              >
+                <View style={styles.featureIconContainer}>
+                  <Ionicons name="sparkles" size={28} color="#007AFF" />
+                </View>
+                <Text style={styles.featureTitle}>AI Picks</Text>
+                <Text style={styles.featureDescription}>Personalized deals just for you</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.featureCard}
+                onPress={() => router.push('/rewards')}
+              >
+                <View style={styles.featureIconContainer}>
+                  <Ionicons name="trophy" size={28} color="#FF6B35" />
+                </View>
+                <Text style={styles.featureTitle}>Rewards</Text>
+                <Text style={styles.featureDescription}>Earn points & badges</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.featuresGrid}>
+              <TouchableOpacity
+                style={styles.featureCard}
+                onPress={() => router.push('/cashback-wallet')}
+              >
+                <View style={styles.featureIconContainer}>
+                  <Ionicons name="wallet" size={28} color="#34C759" />
+                </View>
+                <Text style={styles.featureTitle}>Cashback</Text>
+                <Text style={styles.featureDescription}>Real money back</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.featureCard}
+                onPress={() => router.push('/qr-scanner')}
+              >
+                <View style={styles.featureIconContainer}>
+                  <Ionicons name="qr-code" size={28} color="#5856D6" />
+                </View>
+                <Text style={styles.featureTitle}>QR Scanner</Text>
+                <Text style={styles.featureDescription}>Scan to redeem</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Action Buttons */}
         {user && (
           <View style={styles.actionSection}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => router.push('/qr-scanner')}
-            >
-              <Ionicons name="qr-code-outline" size={24} color="#007AFF" />
-              <Text style={styles.actionButtonText}>Scan QR Code</Text>
-            </TouchableOpacity>
-            
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => router.push('/business-register')}
