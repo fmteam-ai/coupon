@@ -30,6 +30,7 @@ from security_utils import (
     rate_limiter, security_validator, security_headers, security_logger,
     apply_security_checks, validate_business_input, validate_image_input, sanitize_text_input
 )
+from auth_security import enhanced_auth_manager, UserRole, Permission
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
