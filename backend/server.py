@@ -69,6 +69,7 @@ class User(BaseModel):
     user_type: str = "customer"  # customer, business, admin
     phone: Optional[str] = None
     country: Optional[str] = None
+    password_hash: Optional[str] = None  # For business owner authentication
     created_at: datetime = Field(default_factory=datetime.utcnow)
     is_active: bool = True
     is_email_verified: bool = False
