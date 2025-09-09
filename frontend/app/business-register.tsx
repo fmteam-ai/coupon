@@ -95,6 +95,11 @@ export default function BusinessRegisterPage() {
     setFormData(prev => ({ ...prev, country: country.code }));
   };
 
+  const handleLanguageSelect = (language: Language) => {
+    setSelectedLanguage(language);
+    setFormData(prev => ({ ...prev, language: language.code }));
+  };
+
   const handleRegister = async () => {
     if (!formData.name || !formData.email || !formData.phone || !formData.address || !formData.city) {
       Alert.alert('Error', 'Please fill in all required fields');
