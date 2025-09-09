@@ -20,16 +20,6 @@ import * as Location from 'expo-location';
 import { CountrySelector } from '../components/CountryPicker';
 import { Country } from '../utils/countries';
 
-// Conditionally import MapLocationPicker only on native platforms
-let MapLocationPicker: any = null;
-if (Platform.OS !== 'web') {
-  try {
-    MapLocationPicker = require('../components/MapLocationPicker').default;
-  } catch (error) {
-    console.warn('MapLocationPicker not available on this platform');
-  }
-}
-
 const EXPO_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 interface BusinessFormData {
