@@ -1451,6 +1451,112 @@ class BackendTester:
                               f"Cannot connect to database via API: {response.status_code}")
         except Exception as e:
             self.log_result('business_management', 'Database connectivity', False, str(e))
+
+    async def test_smart_push_notifications_system(self):
+        """Test Smart Push Notifications & Business Mobile Dashboard system"""
+        print("\n📱 Testing Smart Push Notifications & Business Mobile Dashboard System...")
+        
+        # Test 1: Push Token Storage (requires authentication)
+        try:
+            push_token_data = {
+                "pushToken": "ExponentPushToken[test-token-123]"
+            }
+            
+            response = await self.client.post(
+                f"{API_BASE}/users/push-token",
+                json=push_token_data
+            )
+            
+            # Should require authentication
+            if response.status_code == 401:
+                self.log_result('smart_push_notifications', 'Push token storage authentication protection', True)
+            else:
+                self.log_result('smart_push_notifications', 'Push token storage authentication protection', False, 
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('smart_push_notifications', 'Push token storage authentication protection', False, str(e))
+        
+        # Test 2: Real-Time Business Metrics (requires business authentication)
+        try:
+            response = await self.client.get(f"{API_BASE}/business/realtime-metrics")
+            
+            # Should require authentication
+            if response.status_code == 401:
+                self.log_result('smart_push_notifications', 'Real-time metrics authentication protection', True)
+            else:
+                self.log_result('smart_push_notifications', 'Real-time metrics authentication protection', False, 
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('smart_push_notifications', 'Real-time metrics authentication protection', False, str(e))
+        
+        # Test 3: Quick Deal Creation (requires business authentication)
+        try:
+            quick_deal_data = {
+                "title": "Flash Sale 50% Off",
+                "description": "Limited time offer on all items",
+                "discount": 50,
+                "active": True,
+                "maxRedemptions": 100
+            }
+            
+            response = await self.client.post(
+                f"{API_BASE}/deals/quick-create",
+                json=quick_deal_data
+            )
+            
+            # Should require authentication
+            if response.status_code == 401:
+                self.log_result('smart_push_notifications', 'Quick deal creation authentication protection', True)
+            else:
+                self.log_result('smart_push_notifications', 'Quick deal creation authentication protection', False, 
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('smart_push_notifications', 'Quick deal creation authentication protection', False, str(e))
+        
+        # Test 4: Deal Alert Notifications (requires business authentication)
+        try:
+            alert_data = {
+                "dealId": "test-deal-id",
+                "radius": 1000
+            }
+            
+            response = await self.client.post(
+                f"{API_BASE}/notifications/deal-alert",
+                json=alert_data
+            )
+            
+            # Should require authentication
+            if response.status_code == 401:
+                self.log_result('smart_push_notifications', 'Deal alert notifications authentication protection', True)
+            else:
+                self.log_result('smart_push_notifications', 'Deal alert notifications authentication protection', False, 
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('smart_push_notifications', 'Deal alert notifications authentication protection', False, str(e))
+        
+        # Test 5: Notification Metrics Tracking (requires authentication)
+        try:
+            metric_data = {
+                "action": "tapped",
+                "type": "deal",
+                "dealId": "test-deal-id",
+                "businessId": "test-business-id",
+                "timestamp": "2024-12-09T23:30:00Z"
+            }
+            
+            response = await self.client.post(
+                f"{API_BASE}/notifications/metrics",
+                json=metric_data
+            )
+            
+            # Should require authentication
+            if response.status_code == 401:
+                self.log_result('smart_push_notifications', 'Notification metrics authentication protection', True)
+            else:
+                self.log_result('smart_push_notifications', 'Notification metrics authentication protection', False, 
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('smart_push_notifications', 'Notification metrics authentication protection', False, str(e))
     
     def print_summary(self):
         """Print test summary"""
