@@ -442,6 +442,47 @@ export default function HomePage() {
           </View>
         )}
 
+        {/* Business Owner Section */}
+        <View style={styles.businessSection}>
+          <Text style={styles.businessTitle}>🏢 For Business Owners</Text>
+          <Text style={styles.businessSubtitle}>
+            Join thousands of businesses growing their customer base
+          </Text>
+          
+          <View style={styles.businessActions}>
+            <TouchableOpacity
+              style={styles.businessButton}
+              onPress={() => router.push('/business-auth-register')}
+            >
+              <Ionicons name="add-circle-outline" size={20} color="#fff" />
+              <Text style={styles.businessButtonText}>Register Your Business</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.businessSecondaryButton}
+              onPress={() => router.push('/business-auth-login')}
+            >
+              <Ionicons name="log-in-outline" size={20} color="#007AFF" />
+              <Text style={styles.businessSecondaryButtonText}>Business Login</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.businessFeatures}>
+            <View style={styles.businessFeature}>
+              <Ionicons name="time-outline" size={16} color="#34C759" />
+              <Text style={styles.businessFeatureText}>90-day free trial</Text>
+            </View>
+            <View style={styles.businessFeature}>
+              <Ionicons name="people-outline" size={16} color="#34C759" />
+              <Text style={styles.businessFeatureText}>Reach more customers</Text>
+            </View>
+            <View style={styles.businessFeature}>
+              <Ionicons name="analytics-outline" size={16} color="#34C759" />
+              <Text style={styles.businessFeatureText}>Advanced analytics</Text>
+            </View>
+          </View>
+        </View>
+
         {/* Footer Links */}
         <View style={styles.footerSection}>
           <Text style={styles.footerTitle}>Legal & Support</Text>
