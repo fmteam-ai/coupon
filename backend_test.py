@@ -1531,6 +1531,19 @@ async def main():
         
         await tester.test_computer_vision_ar_system()
         
+        # Run COMPREHENSIVE SECURITY TESTING (4 PHASES)
+        print("\n" + "="*60)
+        print("🔒 TESTING COMPREHENSIVE SECURITY SYSTEM (4 PHASES)")
+        print("="*60)
+        print("🎯 PRIORITY: Phase 3 GDPR Compliance (newly fixed endpoints)")
+        print("🔧 Testing: Phase 1 API Security (fixed response structures)")
+        print("✅ Verifying: Phase 2 Enhanced Auth & Phase 4 Mobile Security")
+        
+        await tester.test_phase1_api_security_system()
+        await tester.test_phase2_enhanced_auth_system()
+        await tester.test_phase3_data_protection_gdpr()
+        await tester.test_phase4_mobile_security_system()
+        
         # Print summary
         success = tester.print_summary()
         
