@@ -4130,6 +4130,23 @@ async def get_security_status():
     try:
         return {
             "success": True,
+            "rate_limiter": {
+                "status": "active",
+                "blocked_ips": len(rate_limiter.blocked_ips),
+                "active_limits": rate_limiter.rate_limits
+            },
+            "security_validator": {
+                "active": True,
+                "patterns_loaded": len(security_validator.suspicious_patterns),
+                "validation_features": [
+                    "Email format validation",
+                    "Phone number validation", 
+                    "GPS coordinate validation",
+                    "Image data validation",
+                    "Text sanitization",
+                    "Business data validation"
+                ]
+            },
             "security_features": {
                 "rate_limiting": True,
                 "input_validation": True,
@@ -4146,14 +4163,6 @@ async def get_security_status():
                 "pricing": "200 requests/minute"
             },
             "security_headers": list(security_headers.get_security_headers().keys()),
-            "validation_features": [
-                "Email format validation",
-                "Phone number validation", 
-                "GPS coordinate validation",
-                "Image data validation",
-                "Text sanitization",
-                "Business data validation"
-            ],
             "threat_detection": [
                 "SQL injection patterns",
                 "XSS attack patterns",
