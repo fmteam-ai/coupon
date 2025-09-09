@@ -794,4 +794,39 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
   },
+  footerSection: {
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    marginTop: 16,
+  },
+  footerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  footerLinks: {
+    flexDirection: 'column',
+    gap: 12,
+    marginBottom: 20,
+  },
+  footerLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  footerLinkText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+  },
+  footerCopyright: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
 });
