@@ -26,6 +26,7 @@ import jwt
 from emergentintegrations.llm.chat import LlmChat
 from dynamic_pricing import dynamic_pricing_engine
 from computer_vision import computer_vision_engine
+from security_middleware import init_security_middleware, input_validator, api_key_manager
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
