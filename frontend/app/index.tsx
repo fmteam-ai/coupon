@@ -1063,4 +1063,26 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: '500',
   },
+  socialActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  socialButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
 });
