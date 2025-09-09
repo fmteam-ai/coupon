@@ -763,6 +763,9 @@ async def require_admin_auth(user: User = Depends(require_auth)) -> User:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+# Alias for compatibility
+require_admin = require_admin_auth
+
 async def check_business_subscription(business_id: str) -> bool:
     subscription = await db.business_subscriptions.find_one({"business_id": business_id})
     if not subscription:
