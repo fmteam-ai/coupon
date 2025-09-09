@@ -2198,6 +2198,493 @@ async def register_business_with_trial_check(business_data: BusinessRegistration
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Business registration failed: {str(e)}")
 
+# ============================================================================
+# BUSINESS-SPECIFIC AUTHENTICATION SYSTEM
+# ============================================================================
+
+class BusinessRegistrationAuth(BaseModel):
+    name: str
+    email: str
+    phone: str
+    address: str
+    city: str
+    state: str
+    zip_code: str
+    country: str = "US"
+    category: str
+    description: str
+    website: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    # Precise location from map picker
+    precise_latitude: Optional[float] = None
+    precise_longitude: Optional[float] = None
+    location_verified_by_map: bool = False
+    # Business owner details
+    owner_name: str
+    owner_email: str
+    password: str
+
+class BusinessLoginAuth(BaseModel):
+    email: str
+    password: str
+
+@api_router.post("/business/auth/register")
+async def register_business_account(business_data: BusinessRegistrationAuth):
+    """Register new business with dedicated business authentication"""
+    try:
+        # Check if business email already exists
+        existing_business = await db.businesses.find_one({"email": business_data.email})
+        if existing_business:
+            raise HTTPException(status_code=400, detail="Business email already registered")
+        
+        # Check if owner email already exists
+        existing_user = await db.users.find_one({"email": business_data.owner_email})
+        if existing_user:
+            # Use existing user account
+            owner_user_id = existing_user["id"]
+        else:
+            # Create new business owner user account
+            hashed_password = bcrypt.hashpw(business_data.password.encode('utf-8'), bcrypt.gensalt())
+            
+            owner_user = User(
+                name=business_data.owner_name,
+                email=business_data.owner_email,
+                password_hash=hashed_password.decode('utf-8'),
+                user_type="business_owner"
+            )
+            await db.users.insert_one(owner_user.dict())
+            owner_user_id = owner_user.id
+        
+        # Check trial eligibility for business
+        eligibility = await check_previous_business_existence(business_data.dict(), business_data.owner_email)
+        
+        # Create business profile
+        business = Business(
+            name=business_data.name,
+            email=business_data.email,
+            phone=business_data.phone,
+            address=business_data.address,
+            city=business_data.city,
+            state=business_data.state,
+            zip_code=business_data.zip_code,
+            country=business_data.country,
+            category=business_data.category,
+            description=business_data.description,
+            website=business_data.website,
+            latitude=business_data.latitude,
+            longitude=business_data.longitude,
+            precise_latitude=business_data.precise_latitude,
+            precise_longitude=business_data.precise_longitude,
+            location_verified_by_map=business_data.location_verified_by_map,
+            owner_id=owner_user_id,
+            is_approved=False,  # Requires admin approval
+            trial_eligible=eligibility["trial_eligible"]
+        )
+        
+        await db.businesses.insert_one(business.dict())
+        
+        # Create subscription based on eligibility
+        trial_days = 90 if eligibility["trial_eligible"] else 0
+        subscription_status = "trial" if eligibility["trial_eligible"] else "expired_trial"
+        
+        if eligibility["trial_eligible"]:
+            trial_end = datetime.utcnow() + timedelta(days=trial_days)
+        else:
+            trial_end = datetime.utcnow() - timedelta(days=1)  # Already expired
+        
+        trial_subscription = BusinessSubscription(
+            business_id=business.id,
+            plan_id="free",
+            status=subscription_status,
+            trial_end=trial_end
+        )
+        await db.business_subscriptions.insert_one(trial_subscription.dict())
+        
+        # Generate access token for business owner
+        access_token = jwt.encode(
+            {"user_id": owner_user_id, "email": business_data.owner_email, "user_type": "business_owner"},
+            JWT_SECRET,
+            algorithm="HS256"
+        )
+        
+        return {
+            "success": True,
+            "message": "Business registration successful",
+            "business_id": business.id,
+            "owner_id": owner_user_id,
+            "trial_eligible": eligibility["trial_eligible"],
+            "trial_days": trial_days,
+            "subscription_status": subscription_status,
+            "requires_admin_approval": True,
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Business registration failed: {str(e)}")
+
+@api_router.post("/business/auth/login")
+async def login_business_account(login_data: BusinessLoginAuth):
+    """Business-specific login endpoint"""
+    try:
+        # Find business by email
+        business = await db.businesses.find_one({"email": login_data.email})
+        if not business:
+            raise HTTPException(status_code=401, detail="Business not found")
+        
+        # Get business owner user account
+        owner_user = await db.users.find_one({"id": business["owner_id"]})
+        if not owner_user:
+            raise HTTPException(status_code=401, detail="Business owner account not found")
+        
+        # Verify password
+        if not bcrypt.checkpw(login_data.password.encode('utf-8'), owner_user["password_hash"].encode('utf-8')):
+            raise HTTPException(status_code=401, detail="Invalid password")
+        
+        # Check if business is suspended
+        if business.get("is_suspended", False):
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Business account is suspended. Reason: {business.get('suspension_reason', 'Policy violation')}"
+            )
+        
+        # Generate access token
+        access_token = jwt.encode(
+            {"user_id": owner_user["id"], "email": owner_user["email"], "user_type": "business_owner"},
+            JWT_SECRET,
+            algorithm="HS256"
+        )
+        
+        # Get subscription status
+        subscription = await db.business_subscriptions.find_one({"business_id": business["id"]})
+        
+        return {
+            "success": True,
+            "message": "Business login successful",
+            "business_id": business["id"],
+            "business_name": business["name"],
+            "is_approved": business["is_approved"],
+            "subscription_status": subscription["status"] if subscription else "no_subscription",
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Business login failed: {str(e)}")
+
+# ============================================================================
+# ADMIN BUSINESS MANAGEMENT SYSTEM
+# ============================================================================
+
+class BusinessSuspension(BaseModel):
+    business_id: str
+    reason: str
+    duration_days: Optional[int] = None  # None for indefinite suspension
+
+class BusinessAction(BaseModel):
+    business_id: str
+    action: str  # "suspend", "unsuspend", "delete", "approve", "reject"
+    reason: Optional[str] = None
+
+@api_router.post("/admin/business/suspend")
+async def suspend_business(suspension_data: BusinessSuspension, admin_user: User = Depends(require_admin)):
+    """Admin endpoint to suspend a business for ToS violations"""
+    try:
+        business = await db.businesses.find_one({"id": suspension_data.business_id})
+        if not business:
+            raise HTTPException(status_code=404, detail="Business not found")
+        
+        # Update business with suspension details
+        suspension_update = {
+            "is_suspended": True,
+            "suspension_reason": suspension_data.reason,
+            "suspended_at": datetime.utcnow().isoformat(),
+            "suspended_by": admin_user.id
+        }
+        
+        # If duration is specified, calculate unsuspension date
+        if suspension_data.duration_days:
+            unsuspend_date = datetime.utcnow() + timedelta(days=suspension_data.duration_days)
+            suspension_update["unsuspend_at"] = unsuspend_date.isoformat()
+        
+        await db.businesses.update_one(
+            {"id": suspension_data.business_id},
+            {"$set": suspension_update}
+        )
+        
+        # Log admin action
+        admin_log = {
+            "id": str(uuid.uuid4()),
+            "admin_id": admin_user.id,
+            "admin_email": admin_user.email,
+            "action": "suspend_business",
+            "target_id": suspension_data.business_id,
+            "target_type": "business",
+            "reason": suspension_data.reason,
+            "duration_days": suspension_data.duration_days,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await db.admin_logs.insert_one(admin_log)
+        
+        return {
+            "success": True,
+            "message": f"Business suspended successfully",
+            "business_id": suspension_data.business_id,
+            "suspension_reason": suspension_data.reason,
+            "suspended_by": admin_user.email,
+            "duration": f"{suspension_data.duration_days} days" if suspension_data.duration_days else "Indefinite"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to suspend business: {str(e)}")
+
+@api_router.post("/admin/business/unsuspend")
+async def unsuspend_business(business_id: str, admin_user: User = Depends(require_admin)):
+    """Admin endpoint to unsuspend a business"""
+    try:
+        business = await db.businesses.find_one({"id": business_id})
+        if not business:
+            raise HTTPException(status_code=404, detail="Business not found")
+        
+        if not business.get("is_suspended", False):
+            raise HTTPException(status_code=400, detail="Business is not suspended")
+        
+        # Remove suspension
+        await db.businesses.update_one(
+            {"id": business_id},
+            {"$set": {
+                "is_suspended": False,
+                "suspension_reason": None,
+                "suspended_at": None,
+                "suspended_by": None,
+                "unsuspend_at": None
+            }}
+        )
+        
+        # Log admin action
+        admin_log = {
+            "id": str(uuid.uuid4()),
+            "admin_id": admin_user.id,
+            "admin_email": admin_user.email,
+            "action": "unsuspend_business",
+            "target_id": business_id,
+            "target_type": "business",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await db.admin_logs.insert_one(admin_log)
+        
+        return {
+            "success": True,
+            "message": "Business unsuspended successfully",
+            "business_id": business_id,
+            "unsuspended_by": admin_user.email
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to unsuspend business: {str(e)}")
+
+@api_router.delete("/admin/business/{business_id}")
+async def admin_delete_business(business_id: str, reason: str, admin_user: User = Depends(require_admin)):
+    """Admin endpoint to permanently delete a business for severe ToS violations"""
+    try:
+        business = await db.businesses.find_one({"id": business_id})
+        if not business:
+            raise HTTPException(status_code=404, detail="Business not found")
+        
+        # Store deleted business data for trial prevention (same as user deletion)
+        deleted_business_record = DeletedBusiness(
+            business_name=business["name"],
+            business_email=business["email"],
+            business_phone=business["phone"],
+            location=f"{business['address']}, {business['city']}, {business['state']} {business['zip_code']}",
+            owner_email=business.get("owner_email", ""),
+            reason=f"admin_deleted: {reason}"
+        )
+        await db.deleted_businesses.insert_one(deleted_business_record.dict())
+        
+        # Cancel any active subscription
+        subscription = await db.business_subscriptions.find_one({"business_id": business_id})
+        if subscription and subscription.get("stripe_subscription_id"):
+            try:
+                stripe.Subscription.cancel(subscription["stripe_subscription_id"])
+            except Exception as stripe_error:
+                print(f"Stripe cancellation error: {stripe_error}")
+        
+        # Delete all business data
+        await db.business_subscriptions.delete_many({"business_id": business_id})
+        await db.discounts.delete_many({"business_id": business_id})
+        await db.business_ratings.delete_many({"business_id": business_id})
+        await db.businesses.delete_one({"id": business_id})
+        
+        # Log admin action
+        admin_log = {
+            "id": str(uuid.uuid4()),
+            "admin_id": admin_user.id,
+            "admin_email": admin_user.email,
+            "action": "delete_business",
+            "target_id": business_id,
+            "target_type": "business",
+            "reason": reason,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await db.admin_logs.insert_one(admin_log)
+        
+        return {
+            "success": True,
+            "message": "Business permanently deleted",
+            "business_id": business_id,
+            "reason": reason,
+            "deleted_by": admin_user.email,
+            "note": "Business data has been recorded to prevent future trial abuse"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete business: {str(e)}")
+
+@api_router.get("/admin/businesses")
+async def get_businesses_for_admin(
+    page: int = 1,
+    limit: int = 20,
+    status: Optional[str] = None,  # "pending", "approved", "suspended", "all"
+    admin_user: User = Depends(require_admin)
+):
+    """Admin endpoint to get businesses with filtering and pagination"""
+    try:
+        skip = (page - 1) * limit
+        
+        # Build filter query
+        query = {}
+        if status == "pending":
+            query["is_approved"] = False
+        elif status == "approved":
+            query["is_approved"] = True
+        elif status == "suspended":
+            query["is_suspended"] = True
+        
+        # Get businesses with owner info
+        pipeline = [
+            {"$match": query},
+            {
+                "$lookup": {
+                    "from": "users",
+                    "localField": "owner_id",
+                    "foreignField": "id",
+                    "as": "owner"
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "business_subscriptions",
+                    "localField": "id",
+                    "foreignField": "business_id",
+                    "as": "subscription"
+                }
+            },
+            {"$sort": {"created_at": -1}},
+            {"$skip": skip},
+            {"$limit": limit}
+        ]
+        
+        businesses = await db.businesses.aggregate(pipeline).to_list(limit)
+        total = await db.businesses.count_documents(query)
+        
+        # Format response
+        result = []
+        for business in businesses:
+            owner_info = business["owner"][0] if business["owner"] else {}
+            subscription_info = business["subscription"][0] if business["subscription"] else {}
+            
+            result.append({
+                "id": business["id"],
+                "name": business["name"],
+                "email": business["email"],
+                "phone": business["phone"],
+                "category": business["category"],
+                "city": business["city"],
+                "state": business["state"],
+                "is_approved": business["is_approved"],
+                "is_suspended": business.get("is_suspended", False),
+                "suspension_reason": business.get("suspension_reason"),
+                "suspended_at": business.get("suspended_at"),
+                "created_at": business["created_at"],
+                "rating": business.get("rating", 0),
+                "review_count": business.get("review_count", 0),
+                "owner_name": owner_info.get("name", ""),
+                "owner_email": owner_info.get("email", ""),
+                "subscription_status": subscription_info.get("status", "no_subscription"),
+                "trial_eligible": business.get("trial_eligible", True)
+            })
+        
+        return {
+            "businesses": result,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "pages": (total + limit - 1) // limit
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get businesses: {str(e)}")
+
+@api_router.post("/admin/business/action")
+async def perform_business_action(action_data: BusinessAction, admin_user: User = Depends(require_admin)):
+    """Admin endpoint to perform various actions on businesses"""
+    try:
+        business = await db.businesses.find_one({"id": action_data.business_id})
+        if not business:
+            raise HTTPException(status_code=404, detail="Business not found")
+        
+        if action_data.action == "approve":
+            await db.businesses.update_one(
+                {"id": action_data.business_id},
+                {"$set": {
+                    "is_approved": True,
+                    "approved_at": datetime.utcnow().isoformat()
+                }}
+            )
+            message = "Business approved successfully"
+            
+        elif action_data.action == "reject":
+            await db.businesses.update_one(
+                {"id": action_data.business_id},
+                {"$set": {"is_approved": False}}
+            )
+            message = "Business rejected"
+            
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action: {action_data.action}")
+        
+        # Log admin action
+        admin_log = {
+            "id": str(uuid.uuid4()),
+            "admin_id": admin_user.id,
+            "admin_email": admin_user.email,
+            "action": action_data.action,
+            "target_id": action_data.business_id,
+            "target_type": "business",
+            "reason": action_data.reason,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await db.admin_logs.insert_one(admin_log)
+        
+        return {
+            "success": True,
+            "message": message,
+            "business_id": action_data.business_id,
+            "action": action_data.action,
+            "performed_by": admin_user.email
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to perform action: {str(e)}")
+
 # Update existing business registration to use 90-day trial
 async def create_business_with_90_day_trial(business: Business, user_email: str) -> dict:
     """Enhanced business creation with 90-day trial and abuse prevention"""
