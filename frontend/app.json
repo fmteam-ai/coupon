@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "CouponApp",
-    "slug": "couponapp",
+    "name": "DealWiz - Smart Savings",
+    "slug": "dealwiz-smart-savings",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "couponapp",
+    "scheme": "dealwiz",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "description": "Discover amazing discounts and deals from local businesses. Earn rewards, get cashback, and enjoy AI-powered recommendations.",
+    "description": "🎯 Discover amazing discounts and deals from local businesses with AI-powered recommendations. Earn rewards, get cashback, and enjoy smart savings with enterprise-grade security.",
     "keywords": [
       "discount",
       "coupon",
