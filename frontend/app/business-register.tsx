@@ -233,10 +233,17 @@ export default function BusinessRegisterPage() {
 
       if (response.ok) {
         Alert.alert(
-          'Success!', 
-          `Business registered successfully! You have a ${result.trial_days}-day free trial. Your business is pending approval.`,
+          'Registration Successful!', 
+          `Your business has been registered successfully!\n\n` +
+          `✅ ${result.trial_days}-day free trial activated\n` +
+          `📧 Verification email sent to ${formData.email}\n` +
+          `⏳ Business pending admin approval\n\n` +
+          `Please check your email and verify your business address to complete the setup.`,
           [
-            { text: 'OK', onPress: () => router.push('/business-dashboard') }
+            { 
+              text: 'OK', 
+              onPress: () => router.push('/business-dashboard') 
+            }
           ]
         );
       } else {
