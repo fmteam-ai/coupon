@@ -115,6 +115,91 @@ export default function BusinessRegisterPage() {
     setFormData(prev => ({ ...prev, language: language.code }));
   };
 
+  const handleMapLocationSelect = (location: LocationCoordinates) => {
+    setLocationCoordinates(location);
+    setFormData(prev => ({ 
+      ...prev, 
+      latitude: location.latitude, 
+      longitude: location.longitude 
+    }));
+    
+    // If we have address info from the location, we can update the address field
+    if (location.address) {
+      // Parse the address to extract city and address parts if possible
+      const addressParts = location.address.split(', ');
+      if (addressParts.length >= 2) {
+        const city = addressParts[addressParts.length - 2] || formData.city;
+        setFormData(prev => ({ 
+          ...prev, 
+          address: addressParts.slice(0, -2).join(', ') || prev.address,
+          city: city 
+        }));
+      }
+    }
+    setShowMapModal(false);
+  };
+
+  const getCurrentLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required to use current location');
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const coordinates: LocationCoordinates = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+
+      // Try to get address from coordinates
+      try {
+        const geocoded = await Location.reverseGeocodeAsync(coordinates);
+        if (geocoded.length > 0) {
+          const addr = geocoded[0];
+          coordinates.address = [
+            addr.name,
+            addr.street,
+            addr.city,
+            addr.region,
+            addr.country
+          ].filter(Boolean).join(', ');
+          
+          // Update form data with geocoded information
+          setFormData(prev => ({
+            ...prev,
+            address: `${addr.street} ${addr.name}`.trim() || prev.address,
+            city: addr.city || prev.city,
+            latitude: coordinates.latitude,
+            longitude: coordinates.longitude,
+          }));
+        }
+      } catch (geocodeError) {
+        console.error('Geocoding error:', geocodeError);
+      }
+
+      setLocationCoordinates(coordinates);
+      setShowMapForAddress(true);
+    } catch (error) {
+      console.error('Location error:', error);
+      Alert.alert('Location Error', 'Failed to get your current location');
+    }
+  };
+
+  const handleAddressChange = (text: string) => {
+    setFormData(prev => ({ ...prev, address: text }));
+    // Show map after user has typed a reasonable amount
+    if (text.length > 10) {
+      setShowMapForAddress(true);
+    } else {
+      setShowMapForAddress(false);
+    }
+  };
+
   const handleRegister = async () => {
     if (!formData.name || !formData.email || !formData.phone || !formData.address || !formData.city) {
       Alert.alert('Error', 'Please fill in all required fields');
