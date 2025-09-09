@@ -20,7 +20,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import asyncio
-from emergentintegrations.client import EmergentIntegrationsClient
+from emergentintegrations import client
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -34,7 +34,7 @@ db = client_db[os.environ['DB_NAME']]
 stripe.api_key = os.environ['STRIPE_SECRET_KEY']
 
 # Emergent LLM client
-llm_client = EmergentIntegrationsClient(api_key="sk-emergent-72b22E50527Cf2425C")
+llm_client = client.EmergentIntegrationsClient(api_key="sk-emergent-72b22E50527Cf2425C")
 
 # Create the main app without a prefix
 app = FastAPI()
