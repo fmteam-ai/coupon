@@ -56,28 +56,6 @@ interface UsageAnalytics {
   total_customers: number;
   conversion_rate: number;
   last_period_growth: number;
-}
-
-interface RealTimeMetrics {
-  activeDeals: number;
-  todayRedemptions: number;
-  nearbyCustomers: number;
-  liveViews: number;
-  revenueToday: number;
-  averageRating: number;
-  lastUpdate: string;
-}
-
-interface QuickDeal {
-  id?: string;
-  title: string;
-  description: string;
-  discount: number;
-  validUntil: string;
-  active: boolean;
-  maxRedemptions?: number;
-  currentRedemptions?: number;
-}
   monthly_cost: number;
   analytics_period: string;
   metrics: {
