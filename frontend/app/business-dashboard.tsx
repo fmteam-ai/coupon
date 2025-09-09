@@ -389,6 +389,34 @@ export default function BusinessDashboardPage() {
             <Text style={styles.actionDescription}>Complete phone and email verification</Text>
             <Ionicons name="chevron-forward" size={20} color="#999" />
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => router.push('/business-subscription')}
+          >
+            <Ionicons name="card-outline" size={24} color="#007AFF" />
+            <Text style={styles.actionTitle}>Subscription Management</Text>
+            <Text style={styles.actionDescription}>Upgrade plan and manage billing</Text>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Danger Zone */}
+        <View style={styles.dangerSection}>
+          <Text style={styles.dangerTitle}>⚠️ Danger Zone</Text>
+          <TouchableOpacity 
+            style={styles.dangerCard}
+            onPress={() => router.push('/business-delete')}
+          >
+            <Ionicons name="trash-outline" size={24} color="#FF3B30" />
+            <View style={styles.dangerContent}>
+              <Text style={styles.dangerActionTitle}>Delete Business Profile</Text>
+              <Text style={styles.dangerActionDescription}>
+                Permanently delete your business. You'll lose trial eligibility if you register again.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FF3B30" />
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
