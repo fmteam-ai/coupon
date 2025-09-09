@@ -25,6 +25,7 @@ import bcrypt
 import jwt
 from emergentintegrations.llm.chat import LlmChat
 from dynamic_pricing import dynamic_pricing_engine
+from computer_vision import computer_vision_engine
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
