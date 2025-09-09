@@ -3,28 +3,28 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
-  TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  TouchableOpacity,
+  TextInput,
+  Image,
   Alert,
   ActivityIndicator,
-  Image,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-import CountrySelector from '../components/CountryPicker';
-import LanguageSelector from '../components/LanguagePicker';
+import * as ImagePicker from 'expo-image-picker';
+import { CountrySelector } from '../components/CountryPicker';
+import { LanguageSelector } from '../components/LanguagePicker';
 import MapLocationPicker from '../components/MapLocationPicker';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useTranslation, useRTLStyle } from '../contexts/LanguageContext';
+import { Country } from '../utils/countries';
 import { Language } from '../utils/languages';
+import * as Location from 'expo-location';
 
 const EXPO_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -57,10 +57,9 @@ interface LocationCoordinates {
 }
 
 export default function BusinessRegisterPage() {
-  const { t } = useLanguage();
-  const [loading, setLoading] = useState(false);
-  const [logoImage, setLogoImage] = useState<string | null>(null);
-
+  const t = useTranslation();
+  const { isRTL, getTextAlign, getFlexDirection } = useRTLStyle();
+  
   const [formData, setFormData] = useState<BusinessData>({
     name: '',
     description: '',
@@ -74,7 +73,13 @@ export default function BusinessRegisterPage() {
     country: 'US',
     language: 'en',
   });
-
+  const [loading, setLoading] = useState(false);
+  const [logoImage, setLogoImage] = useState<string | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<Country | null>({
+    code: 'US',
+    name: 'United States',
+    flag: '🇺🇸'
+  });
   const [selectedLanguage, setSelectedLanguage] = useState<Language | null>({
     code: 'en',
     name: 'English',
@@ -90,32 +95,28 @@ export default function BusinessRegisterPage() {
 
   const categories = [
     'Restaurant', 'Retail', 'Health & Beauty', 'Services', 
-    'Entertainment', 'Travel', 'Technology', 'Fitness'
+    'Entertainment', 'Travel', 'Technology', 'Fitness', 
+    'Education', 'Other'
   ];
 
   const pickImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (permissionResult.granted === false) {
-      Alert.alert('Permission Required', 'Permission to access camera roll is required!');
-      return;
-    }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.7,
+      quality: 0.8,
       base64: true,
     });
 
     if (!result.canceled && result.assets[0].base64) {
       setLogoImage(result.assets[0].base64);
+      setFormData(prev => ({ ...prev, logo: result.assets[0].base64 }));
     }
   };
 
-  const handleCountrySelect = (countryCode: string) => {
-    setFormData(prev => ({ ...prev, country: countryCode }));
+  const handleCountrySelect = (country: Country) => {
+    setSelectedCountry(country);
+    setFormData(prev => ({ ...prev, country: country.code }));
   };
 
   const handleLanguageSelect = (language: Language) => {
@@ -209,19 +210,23 @@ export default function BusinessRegisterPage() {
       return;
     }
 
-    setLoading(true);
     try {
-      const registrationData = {
-        ...formData,
-        logo: logoImage,
-      };
+      setLoading(true);
+      const token = await AsyncStorage.getItem('session_token');
+      
+      if (!token) {
+        Alert.alert('Error', 'Please login first');
+        router.push('/');
+        return;
+      }
 
       const response = await fetch(`${EXPO_BACKEND_URL}/api/businesses/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(registrationData),
+        body: JSON.stringify(formData),
       });
 
       const result = await response.json();
@@ -269,19 +274,23 @@ export default function BusinessRegisterPage() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#007AFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Register Business</Text>
+        <Text style={[styles.headerTitle, { textAlign: getTextAlign('center') }]}>
+          {t.businessRegistration.title}
+        </Text>
         <View style={styles.headerRight} />
       </View>
 
       <KeyboardAvoidingView 
-        style={styles.flex1} 
+        style={styles.content} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Logo Section */}
           <View style={styles.logoSection}>
             <Text style={styles.sectionTitle}>Business Logo</Text>
             <TouchableOpacity style={styles.logoContainer} onPress={pickImage}>
@@ -292,15 +301,16 @@ export default function BusinessRegisterPage() {
                 />
               ) : (
                 <View style={styles.logoPlaceholder}>
-                  <Ionicons name="camera" size={40} color="#ccc" />
-                  <Text style={styles.logoText}>Add Logo</Text>
+                  <Ionicons name="camera-outline" size={32} color="#999" />
+                  <Text style={styles.logoPlaceholderText}>Add Logo</Text>
                 </View>
               )}
             </TouchableOpacity>
           </View>
 
+          {/* Business Information */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Basic Information</Text>
+            <Text style={styles.sectionTitle}>Business Information</Text>
             
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Business Name *</Text>
@@ -308,7 +318,7 @@ export default function BusinessRegisterPage() {
                 style={styles.input}
                 value={formData.name}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
-                placeholder="Enter your business name"
+                placeholder="Enter business name"
                 placeholderTextColor="#999"
               />
             </View>
@@ -345,14 +355,16 @@ export default function BusinessRegisterPage() {
                 placeholder="Describe your business"
                 placeholderTextColor="#999"
                 multiline
-                numberOfLines={3}
+                numberOfLines={4}
+                textAlignVertical="top"
               />
             </View>
           </View>
 
+          {/* Contact Information */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Contact Information</Text>
-
+            
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email *</Text>
               <TextInput
@@ -379,9 +391,13 @@ export default function BusinessRegisterPage() {
             </View>
           </View>
 
+          {/* Location Information */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Location Information</Text>
-
+            <Text style={styles.sectionTitle}>📍 Business Location</Text>
+            <Text style={styles.locationSubtitle}>
+              Enter your address below and confirm your exact location on the map
+            </Text>
+            
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Address *</Text>
               <TextInput
@@ -430,16 +446,17 @@ export default function BusinessRegisterPage() {
               </View>
 
               <View style={[styles.inputGroup, styles.flex1, styles.marginLeft]}>
-                <Text style={styles.label}>Country *</Text>
+                <Text style={styles.label}>{t.businessRegistration.country} *</Text>
                 <CountrySelector
                   selectedCountryCode={formData.country}
                   onCountrySelect={handleCountrySelect}
-                  placeholder="Select Country"
+                  placeholder={t.businessRegistration.selectCountry}
                   style={styles.input}
                 />
               </View>
             </View>
 
+            {/* Interactive Map Location Picker */}
             {showMapForAddress && (
               <View style={styles.mapSection}>
                 <View style={styles.mapHeader}>
@@ -491,8 +508,9 @@ export default function BusinessRegisterPage() {
               </View>
             )}
 
+            {/* Language Selection */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Preferred Language *</Text>
+              <Text style={styles.label}>{t.businessRegistration.preferredLanguage} *</Text>
               <LanguageSelector
                 onLanguageSelect={handleLanguageSelect}
                 style={styles.input}
@@ -500,6 +518,7 @@ export default function BusinessRegisterPage() {
             </View>
           </View>
 
+          {/* Terms */}
           <View style={styles.termsSection}>
             <Text style={styles.termsText}>
               By registering your business, you agree to our Terms of Service and Privacy Policy. 
@@ -507,6 +526,7 @@ export default function BusinessRegisterPage() {
             </Text>
           </View>
 
+          {/* Register Button */}
           <TouchableOpacity
             style={[styles.registerButton, loading && styles.disabledButton]}
             onPress={handleRegister}
@@ -524,6 +544,7 @@ export default function BusinessRegisterPage() {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* Map Modal - Outside ScrollView */}
       <MapLocationPicker
         visible={showMapModal}
         onClose={() => setShowMapModal(false)}
@@ -540,9 +561,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
-  },
-  flex1: {
-    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -562,49 +580,55 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
+  placeholder: {
+    width: 40,
+  },
   headerRight: {
     width: 40,
   },
+  content: {
+    flex: 1,
+  },
   logoSection: {
+    backgroundColor: '#fff',
     padding: 20,
+    marginBottom: 12,
     alignItems: 'center',
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 16,
-  },
   logoContainer: {
+    marginTop: 16,
+  },
+  logoImage: {
     width: 100,
     height: 100,
-    borderRadius: 50,
-    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+  },
+  logoPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 2,
     borderColor: '#e1e1e1',
     borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  logoImage: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-  },
-  logoPlaceholder: {
-    alignItems: 'center',
-  },
-  logoText: {
+  logoPlaceholderText: {
     fontSize: 12,
     color: '#999',
     marginTop: 4,
   },
   section: {
     backgroundColor: '#fff',
-    marginHorizontal: 20,
-    marginBottom: 16,
-    borderRadius: 12,
     padding: 20,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
   },
   inputGroup: {
     marginBottom: 16,
@@ -618,32 +642,25 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: '#f8f9fa',
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 12,
     fontSize: 16,
     color: '#333',
     borderWidth: 1,
     borderColor: '#e1e1e1',
   },
   textArea: {
-    height: 80,
+    height: 100,
     textAlignVertical: 'top',
   },
-  row: {
-    flexDirection: 'row',
-  },
-  marginLeft: {
-    marginLeft: 12,
-  },
   categoryScroll: {
-    flexGrow: 0,
+    flexDirection: 'row',
   },
   categoryButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    marginRight: 12,
-    backgroundColor: '#f8f9fa',
     borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    marginRight: 8,
     borderWidth: 1,
     borderColor: '#e1e1e1',
   },
@@ -654,11 +671,56 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 14,
     color: '#666',
+    fontWeight: '500',
   },
   categoryTextActive: {
     color: '#fff',
-    fontWeight: '500',
   },
+  row: {
+    flexDirection: 'row',
+  },
+  flex1: {
+    flex: 1,
+  },
+  marginLeft: {
+    marginLeft: 12,
+  },
+  termsSection: {
+    backgroundColor: '#fff',
+    padding: 20,
+    marginBottom: 20,
+  },
+  termsText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  registerButton: {
+    backgroundColor: '#007AFF',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    paddingVertical: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  registerButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  // Map location picker styles
   mapSection: {
     marginTop: 16,
     backgroundColor: '#f8f9fa',
@@ -738,38 +800,5 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
     fontStyle: 'italic',
-  },
-  termsSection: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-    padding: 16,
-    backgroundColor: '#fff3cd',
-    borderRadius: 8,
-  },
-  termsText: {
-    fontSize: 12,
-    color: '#856404',
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  registerButton: {
-    backgroundColor: '#007AFF',
-    marginHorizontal: 20,
-    marginBottom: 20,
-    paddingVertical: 16,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  registerButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
   },
 });
