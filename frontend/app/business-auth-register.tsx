@@ -78,7 +78,11 @@ export default function BusinessAuthRegisterPage() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string>('not_set');
   const [showMapPicker, setShowMapPicker] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<Country | null>({
+    code: 'US',
+    name: 'United States',
+    flag: '🇺🇸'
+  });
 
   const updateFormData = (field: keyof BusinessFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
