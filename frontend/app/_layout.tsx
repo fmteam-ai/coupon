@@ -165,6 +165,27 @@ export default function RootLayout() {
           href: null, // Hide from tab bar
         }}
       />
+      
+      <Tabs.Screen
+        name="business-auth-register"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      
+      <Tabs.Screen
+        name="business-auth-login"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      
+      <Tabs.Screen
+        name="admin-businesses"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
 
       {/* Dynamic routes */}
       <Tabs.Screen
