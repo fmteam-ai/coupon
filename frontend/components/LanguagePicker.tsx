@@ -365,6 +365,49 @@ const styles = StyleSheet.create({
   languagesList: {
     flex: 1,
   },
+  searchContainer: {
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e1e1e1',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+  clearButton: {
+    padding: 4,
+  },
+  sectionHeader: {
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e1e1e1',
+  },
+  sectionHeaderText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    textTransform: 'uppercase',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+  },
+  languagesList: {
+    flex: 1,
+  },
   languageItem: {
     alignItems: 'center',
     justifyContent: 'space-between',
