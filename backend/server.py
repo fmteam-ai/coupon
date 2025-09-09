@@ -2440,6 +2440,149 @@ async def login_business_account(login_data: BusinessLoginAuth):
         raise HTTPException(status_code=500, detail=f"Business login failed: {str(e)}")
 
 # ============================================================================
+# BUSINESS EMAIL VERIFICATION SYSTEM
+# ============================================================================
+
+@api_router.post("/business/verify-email")
+async def verify_business_email(
+    verify_request: VerifyBusinessEmailRequest, 
+    user: User = Depends(require_auth)
+):
+    """Verify business email address"""
+    try:
+        # Find the verification record
+        verification = await db.business_email_verifications.find_one({
+            "verification_code": verify_request.verification_code,
+            "verified": False,
+            "expires_at": {"$gt": datetime.utcnow()}
+        })
+        
+        if not verification:
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid or expired verification code"
+            )
+        
+        # Find the business
+        business = await db.businesses.find_one({"id": verification["business_id"]})
+        if not business:
+            raise HTTPException(status_code=404, detail="Business not found")
+        
+        # Verify ownership
+        if business["owner_id"] != user.id:
+            raise HTTPException(
+                status_code=403, 
+                detail="Not authorized to verify this business email"
+            )
+        
+        # Mark verification as completed
+        await db.business_email_verifications.update_one(
+            {"_id": verification["_id"]},
+            {
+                "$set": {
+                    "verified": True,
+                    "verified_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        # Update business record to mark email as verified
+        await db.businesses.update_one(
+            {"id": verification["business_id"]},
+            {
+                "$set": {
+                    "email_verified": True,
+                    "email_verified_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        return {
+            "success": True,
+            "message": "Business email verified successfully",
+            "business_id": verification["business_id"]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email verification failed: {str(e)}")
+
+@api_router.post("/business/resend-verification")
+async def resend_business_verification(user: User = Depends(require_auth)):
+    """Resend business email verification"""
+    try:
+        # Find user's business
+        business = await db.businesses.find_one({"owner_id": user.id})
+        if not business:
+            raise HTTPException(status_code=404, detail="No business found for this user")
+        
+        # Check if already verified
+        if business.get("email_verified", False):
+            raise HTTPException(status_code=400, detail="Business email is already verified")
+        
+        # Check for existing unexpired verification
+        existing_verification = await db.business_email_verifications.find_one({
+            "business_id": business["id"],
+            "verified": False,
+            "expires_at": {"$gt": datetime.utcnow()}
+        })
+        
+        if existing_verification:
+            # Resend the existing code
+            verification_code = existing_verification["verification_code"]
+        else:
+            # Create new verification code
+            verification_code = ''.join(random.choices(string.digits, k=6))
+            verification_data = BusinessEmailVerification(
+                business_id=business["id"],
+                email=business["email"],
+                verification_code=verification_code
+            )
+            await db.business_email_verifications.insert_one(verification_data.dict())
+        
+        # Send verification email
+        success = await send_business_verification_email(
+            business["email"], 
+            verification_code, 
+            business["name"]
+        )
+        
+        return {
+            "success": success,
+            "message": "Verification email sent successfully" if success else "Failed to send verification email",
+            "email": business["email"]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Resend verification failed: {str(e)}")
+
+@api_router.get("/business/verification-status")
+async def get_business_verification_status(user: User = Depends(require_auth)):
+    """Get business email verification status"""
+    try:
+        # Find user's business
+        business = await db.businesses.find_one({"owner_id": user.id})
+        if not business:
+            raise HTTPException(status_code=404, detail="No business found for this user")
+        
+        return {
+            "business_id": business["id"],
+            "business_name": business["name"],
+            "email": business["email"],
+            "email_verified": business.get("email_verified", False),
+            "email_verified_at": business.get("email_verified_at"),
+            "is_approved": business.get("is_approved", False)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Get verification status failed: {str(e)}")
+
+# ============================================================================
 # ADMIN BUSINESS MANAGEMENT SYSTEM
 # ============================================================================
 
