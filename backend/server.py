@@ -31,6 +31,7 @@ from security_utils import (
     apply_security_checks, validate_business_input, validate_image_input, sanitize_text_input
 )
 from auth_security import enhanced_auth_manager, UserRole, Permission
+from data_protection import data_protection_manager, DataClassification, ConsentType
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
