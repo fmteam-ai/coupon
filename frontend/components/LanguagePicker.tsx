@@ -7,28 +7,33 @@ import {
   Modal,
   ScrollView,
   Alert,
+  TextInput,
+  SectionList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage, useTranslation, useRTLStyle } from '../contexts/LanguageContext';
-import { Language } from '../utils/languages';
+import { Language, getLanguagesByRegion, getPopularLanguages } from '../utils/languages';
 
 interface LanguagePickerProps {
   visible: boolean;
   onClose: () => void;
   title?: string;
   showCurrentSelection?: boolean;
+  showRegionalGroups?: boolean;
 }
 
 export default function LanguagePicker({
   visible,
   onClose,
   title,
-  showCurrentSelection = true
+  showCurrentSelection = true,
+  showRegionalGroups = false
 }: LanguagePickerProps) {
   const { currentLanguage, setLanguage, availableLanguages, getCurrentLanguage } = useLanguage();
   const t = useTranslation();
   const { isRTL, getTextAlign, getFlexDirection } = useRTLStyle();
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleLanguageSelect = async (language: Language) => {
     try {
@@ -45,11 +50,103 @@ export default function LanguagePicker({
 
   const currentLang = getCurrentLanguage();
 
+  // Filter languages based on search query
+  const filteredLanguages = availableLanguages.filter(language =>
+    language.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    language.nativeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    language.code.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Group languages for better organization
+  const getOrganizedLanguages = () => {
+    if (searchQuery) {
+      return [{
+        title: `${t.search} "${searchQuery}"`,
+        data: filteredLanguages
+      }];
+    }
+
+    if (showRegionalGroups) {
+      const regions = getLanguagesByRegion();
+      return Object.entries(regions).map(([region, languages]) => ({
+        title: region,
+        data: languages
+      }));
+    }
+
+    // Show popular languages first, then others
+    const popularLanguages = getPopularLanguages();
+    const otherLanguages = availableLanguages.filter(
+      lang => !popularLanguages.some(popular => popular.code === lang.code)
+    );
+
+    const sections = [];
+    if (popularLanguages.length > 0) {
+      sections.push({
+        title: 'Popular Languages',
+        data: popularLanguages
+      });
+    }
+    if (otherLanguages.length > 0) {
+      sections.push({
+        title: 'Other Languages',
+        data: otherLanguages
+      });
+    }
+    return sections;
+  };
+
+  const languageSections = getOrganizedLanguages();
+
+  const renderLanguageItem = ({ item: language }: { item: Language }) => {
+    const isSelected = language.code === currentLanguage;
+    
+    return (
+      <TouchableOpacity
+        style={[
+          styles.languageItem,
+          isSelected && styles.languageItemSelected,
+          { flexDirection: getFlexDirection('row') }
+        ]}
+        onPress={() => handleLanguageSelect(language)}
+        disabled={isSelected}
+      >
+        <View style={[styles.languageInfo, { flexDirection: getFlexDirection('row') }]}>
+          <Text style={styles.languageFlag}>{language.flag}</Text>
+          <View style={styles.languageDetails}>
+            <Text style={[
+              styles.languageName,
+              isSelected && styles.languageNameSelected,
+              { textAlign: getTextAlign('left') }
+            ]}>
+              {language.nativeName}
+            </Text>
+            <Text style={[styles.languageSubtext, { textAlign: getTextAlign('left') }]}>
+              {language.name} {language.rtl && '(RTL)'}
+            </Text>
+          </View>
+        </View>
+        
+        {isSelected && (
+          <Ionicons name="checkmark" size={20} color="#007AFF" />
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const renderSectionHeader = ({ section }: { section: { title: string } }) => (
+    <View style={styles.sectionHeader}>
+      <Text style={[styles.sectionHeaderText, { textAlign: getTextAlign('left') }]}>
+        {section.title}
+      </Text>
+    </View>
+  );
+
   return (
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle="fullScreen"
     >
       <SafeAreaView style={[styles.container, isRTL && styles.rtlContainer]}>
         {/* Header */}
@@ -67,8 +164,29 @@ export default function LanguagePicker({
           </TouchableOpacity>
         </View>
 
+        {/* Search Bar */}
+        <View style={[styles.searchContainer, { flexDirection: getFlexDirection('row') }]}>
+          <Ionicons name="search-outline" size={20} color="#666" style={styles.searchIcon} />
+          <TextInput
+            style={[styles.searchInput, { textAlign: getTextAlign('left') }]}
+            placeholder={`${t.common.search} languages...`}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              style={styles.clearButton}
+            >
+              <Ionicons name="close-circle" size={20} color="#666" />
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* Current Language (if enabled) */}
-        {showCurrentSelection && currentLang && (
+        {showCurrentSelection && currentLang && !searchQuery && (
           <View style={styles.currentLanguageSection}>
             <Text style={[styles.sectionTitle, { textAlign: getTextAlign('left') }]}>
               {t.language.currentLanguage}
@@ -88,54 +206,32 @@ export default function LanguagePicker({
           </View>
         )}
 
-        {/* Available Languages */}
+        {/* Languages List */}
         <View style={styles.languagesSection}>
-          <Text style={[styles.sectionTitle, { textAlign: getTextAlign('left') }]}>
-            {t.language.selectLanguage}
-          </Text>
-          
-          <ScrollView style={styles.languagesList} showsVerticalScrollIndicator={false}>
-            {availableLanguages.map((language) => {
-              const isSelected = language.code === currentLanguage;
-              
-              return (
-                <TouchableOpacity
-                  key={language.code}
-                  style={[
-                    styles.languageItem,
-                    isSelected && styles.languageItemSelected,
-                    { flexDirection: getFlexDirection('row') }
-                  ]}
-                  onPress={() => handleLanguageSelect(language)}
-                  disabled={isSelected}
-                >
-                  <View style={[styles.languageInfo, { flexDirection: getFlexDirection('row') }]}>
-                    <Text style={styles.languageFlag}>{language.flag}</Text>
-                    <View style={styles.languageDetails}>
-                      <Text style={[
-                        styles.languageName,
-                        isSelected && styles.languageNameSelected,
-                        { textAlign: getTextAlign('left') }
-                      ]}>
-                        {language.nativeName}
-                      </Text>
-                      <Text style={[styles.languageSubtext, { textAlign: getTextAlign('left') }]}>
-                        {language.name} {language.rtl && '(RTL)'}
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  {isSelected && (
-                    <Ionicons name="checkmark" size={20} color="#007AFF" />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          <SectionList
+            sections={languageSections}
+            keyExtractor={(item) => item.code}
+            renderItem={renderLanguageItem}
+            renderSectionHeader={renderSectionHeader}
+            showsVerticalScrollIndicator={false}
+            stickySectionHeadersEnabled={true}
+            ListEmptyComponent={() => (
+              <View style={styles.emptyState}>
+                <Ionicons name="search-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyStateTitle}>No languages found</Text>
+                <Text style={styles.emptyStateText}>
+                  Try searching with a different term
+                </Text>
+              </View>
+            )}
+          />
         </View>
 
-        {/* Footer */}
+        {/* Language Stats */}
         <View style={styles.footer}>
+          <Text style={[styles.footerText, { textAlign: getTextAlign('center') }]}>
+            {availableLanguages.length} languages available
+          </Text>
           <TouchableOpacity
             style={styles.closeFooterButton}
             onPress={onClose}
