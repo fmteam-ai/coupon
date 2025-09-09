@@ -36,6 +36,9 @@ db = client_db[os.environ['DB_NAME']]
 # Stripe configuration
 stripe.api_key = os.environ['STRIPE_SECRET_KEY']
 
+# JWT configuration
+JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-here')
+
 # Emergent LLM client initialization (lazy loading)
 llm_client = None
 
