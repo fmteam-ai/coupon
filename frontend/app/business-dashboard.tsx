@@ -301,27 +301,27 @@ export default function BusinessDashboardPage() {
         )}
 
         {/* Analytics Overview */}
-        {analytics && (
+        {usageAnalytics && (
           <View style={styles.analyticsSection}>
             <Text style={styles.sectionTitle}>Overview</Text>
             
             <View style={styles.metricsGrid}>
               <View style={styles.metricCard}>
                 <Ionicons name="ticket-outline" size={24} color="#007AFF" />
-                <Text style={styles.metricValue}>{analytics.total_discounts}</Text>
+                <Text style={styles.metricValue}>{usageAnalytics.metrics.total_discounts}</Text>
                 <Text style={styles.metricLabel}>Total Coupons</Text>
               </View>
               
               <View style={styles.metricCard}>
                 <Ionicons name="checkmark-circle-outline" size={24} color="#34C759" />
-                <Text style={styles.metricValue}>{analytics.active_discounts}</Text>
+                <Text style={styles.metricValue}>{usageAnalytics.metrics.active_discounts}</Text>
                 <Text style={styles.metricLabel}>Active Coupons</Text>
               </View>
               
               <View style={styles.metricCard}>
                 <Ionicons name="people-outline" size={24} color="#FF9500" />
-                <Text style={styles.metricValue}>{analytics.total_redemptions}</Text>
-                <Text style={styles.metricLabel}>Total Redemptions</Text>
+                <Text style={styles.metricValue}>{usageAnalytics.metrics.recent_customer_engagement}</Text>
+                <Text style={styles.metricLabel}>Customer Engagement</Text>
               </View>
             </View>
           </View>
