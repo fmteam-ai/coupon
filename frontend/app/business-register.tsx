@@ -35,10 +35,14 @@ interface BusinessData {
   address: string;
   city: string;
   country: string;
+  language: string;
   logo?: string;
 }
 
 export default function BusinessRegisterPage() {
+  const t = useTranslation();
+  const { isRTL, getTextAlign, getFlexDirection } = useRTLStyle();
+  
   const [formData, setFormData] = useState<BusinessData>({
     name: '',
     description: '',
@@ -48,6 +52,7 @@ export default function BusinessRegisterPage() {
     address: '',
     city: '',
     country: 'US',
+    language: 'en',
   });
   const [loading, setLoading] = useState(false);
   const [logoImage, setLogoImage] = useState<string | null>(null);
@@ -55,6 +60,13 @@ export default function BusinessRegisterPage() {
     code: 'US',
     name: 'United States',
     flag: '🇺🇸'
+  });
+  const [selectedLanguage, setSelectedLanguage] = useState<Language | null>({
+    code: 'en',
+    name: 'English',
+    nativeName: 'English',
+    flag: '🇺🇸',
+    rtl: false,
   });
 
   const categories = [
