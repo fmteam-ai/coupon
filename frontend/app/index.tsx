@@ -17,6 +17,8 @@ import { StatusBar } from 'expo-status-bar';
 import { router, useGlobalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import VoiceAssistant from '../components/VoiceAssistant';
+import { useTranslation } from '../contexts/LanguageContext';
 
 const EXPO_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
