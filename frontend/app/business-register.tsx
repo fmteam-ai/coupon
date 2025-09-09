@@ -293,14 +293,23 @@ export default function BusinessRegisterPage() {
               </View>
 
               <View style={[styles.inputGroup, styles.flex1, styles.marginLeft]}>
-                <Text style={styles.label}>Country *</Text>
+                <Text style={styles.label}>{t.businessRegistration.country} *</Text>
                 <CountrySelector
                   selectedCountryCode={formData.country}
                   onCountrySelect={handleCountrySelect}
-                  placeholder="Select Country"
+                  placeholder={t.businessRegistration.selectCountry}
                   style={styles.input}
                 />
               </View>
+            </View>
+            
+            {/* Language Selection */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t.businessRegistration.preferredLanguage} *</Text>
+              <LanguageSelector
+                onLanguageSelect={handleLanguageSelect}
+                style={styles.input}
+              />
             </View>
           </View>
 
