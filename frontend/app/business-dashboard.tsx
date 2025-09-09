@@ -201,9 +201,6 @@ export default function BusinessDashboardPage() {
     fetchData();
   };
 
-  const handleUpgradeSubscription = () => {
-    router.push('/subscription-plans');
-  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
