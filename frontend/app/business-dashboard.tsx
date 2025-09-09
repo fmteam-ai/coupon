@@ -125,6 +125,13 @@ export default function BusinessDashboardPage() {
 
   useEffect(() => {
     fetchData();
+    startRealtimeUpdates();
+    
+    return () => {
+      if (realtimeInterval) {
+        clearInterval(realtimeInterval);
+      }
+    };
   }, []);
 
   const fetchData = async () => {
@@ -160,6 +167,9 @@ export default function BusinessDashboardPage() {
         setAvailablePlans(plansData);
       }
 
+      // Fetch initial real-time metrics
+      await fetchRealTimeMetrics();
+
     } catch (error) {
       console.error('Error fetching data:', error);
       Alert.alert('Error', 'Failed to load dashboard data');
@@ -167,6 +177,119 @@ export default function BusinessDashboardPage() {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const fetchRealTimeMetrics = async () => {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch(`${EXPO_BACKEND_URL}/api/business/realtime-metrics`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const metrics = await response.json();
+        setRealTimeMetrics({
+          ...metrics,
+          lastUpdate: new Date().toISOString(),
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching real-time metrics:', error);
+    }
+  };
+
+  const startRealtimeUpdates = () => {
+    const interval = setInterval(() => {
+      fetchRealTimeMetrics();
+    }, 30000); // Update every 30 seconds
+    
+    setRealtimeInterval(interval);
+  };
+
+  const createQuickDeal = async () => {
+    if (!quickDeal.title || !quickDeal.description || quickDeal.discount <= 0) {
+      Alert.alert('Error', 'Please fill in all fields with valid values');
+      return;
+    }
+
+    setCreatingDeal(true);
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const dealData = {
+        ...quickDeal,
+        validUntil: quickDeal.validUntil || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Default 24 hours
+      };
+
+      const response = await fetch(`${EXPO_BACKEND_URL}/api/deals/quick-create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(dealData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        Alert.alert(
+          '🚀 Deal Created!',
+          `Your "${quickDeal.title}" deal is now live and customers nearby will be notified!`,
+          [
+            { text: 'Create Another', onPress: resetQuickDeal },
+            { text: 'Close', onPress: () => setQuickDealModalVisible(false) },
+          ]
+        );
+        
+        // Refresh metrics to show new deal
+        await fetchRealTimeMetrics();
+        
+        // Send notifications to nearby customers
+        await notifyNearbyCustomers(result.dealId);
+      } else {
+        const error = await response.json();
+        Alert.alert('Error', error.detail || 'Failed to create deal');
+      }
+    } catch (error) {
+      console.error('Error creating quick deal:', error);
+      Alert.alert('Error', 'Failed to create deal');
+    } finally {
+      setCreatingDeal(false);
+    }
+  };
+
+  const notifyNearbyCustomers = async (dealId: string) => {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) return;
+
+      await fetch(`${EXPO_BACKEND_URL}/api/notifications/deal-alert`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ dealId }),
+      });
+    } catch (error) {
+      console.error('Error sending notifications:', error);
+    }
+  };
+
+  const resetQuickDeal = () => {
+    setQuickDeal({
+      title: '',
+      description: '',
+      discount: 0,
+      validUntil: '',
+      active: true,
+    });
   };
 
   const handleUpgradeSubscription = async (planId: string) => {
