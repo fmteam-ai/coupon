@@ -613,17 +613,34 @@ async def main():
     """Run all backend tests"""
     print("🚀 Starting Comprehensive Backend Testing...")
     print(f"Testing backend at: {API_BASE}")
+    print("\n🎯 FOCUS: Testing TOP 5 MOST IMPACTFUL FEATURES")
+    print("1. AI Personal Deal Recommendations")
+    print("2. Gamified Rewards System")
+    print("3. Integrated Cashback System")
+    print("4. Geofencing System")
+    print("5. Enhanced Business Analytics Dashboard")
     
     tester = BackendTester()
     
     try:
-        # Run all test suites
+        # Run existing test suites first
         await tester.test_authentication_system()
         await tester.test_business_management()
         await tester.test_discount_system()
         await tester.test_rating_system()
         await tester.test_admin_system()
         await tester.test_database_operations()
+        
+        # Run NEW FEATURE tests (TOP 5 MOST IMPACTFUL)
+        print("\n" + "="*60)
+        print("🌟 TESTING TOP 5 MOST IMPACTFUL FEATURES")
+        print("="*60)
+        
+        await tester.test_ai_recommendations()
+        await tester.test_gamified_rewards()
+        await tester.test_cashback_system()
+        await tester.test_geofencing_system()
+        await tester.test_business_analytics()
         
         # Print summary
         success = tester.print_summary()
