@@ -45,6 +45,7 @@ interface Discount {
 }
 
 export default function HomePage() {
+  const t = useTranslation();
   const [user, setUser] = useState<any>(null);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
