@@ -152,6 +152,23 @@ export default function HomePage() {
   };
 
 
+  const handleLogin = () => {
+    const authUrl = `https://demobackend.emergentagent.com/auth/v1/env/oauth?_redirect_uri=${encodeURIComponent('https://couponmobile.preview.emergentagent.com/')}`;
+    router.push(authUrl as any);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${EXPO_BACKEND_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      setUser(null);
+      await AsyncStorage.removeItem('session_token');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   const handleShareDeal = async (discountId: string, businessName: string, dealTitle: string) => {
     if (!user) {
