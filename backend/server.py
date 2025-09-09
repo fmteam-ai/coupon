@@ -5047,6 +5047,186 @@ async def cleanup_mobile_security_data():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Cleanup error: {str(e)}")
 
+# ============================================================================
+# DATA PROTECTION & GDPR COMPLIANCE ENDPOINTS (PHASE 3)
+# ============================================================================
+
+class ConsentRequest(BaseModel):
+    consent_type: str
+    granted: bool
+
+class DataExportRequest(BaseModel):
+    user_id: str
+
+class DataDeletionRequest(BaseModel):
+    user_id: str
+    reason: str = "user_request"
+
+class DataRequestModel(BaseModel):
+    request_type: str
+    details: Optional[str] = None
+
+@api_router.post("/gdpr/consent")
+async def record_user_consent(request: ConsentRequest, http_request: Request, user: User = Depends(require_auth)):
+    """Record user consent for GDPR compliance"""
+    try:
+        from data_protection import ConsentType
+        
+        # Validate consent type
+        try:
+            consent_type = ConsentType(request.consent_type)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid consent type")
+        
+        # Get client IP and user agent
+        client_ip = http_request.client.host if http_request.client else "unknown"
+        user_agent = http_request.headers.get("user-agent", "unknown")
+        
+        success = data_protection_manager.record_consent(
+            user.id, consent_type, request.granted, client_ip, user_agent
+        )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to record consent")
+        
+        return {
+            "success": True,
+            "message": f"Consent {request.consent_type} {'granted' if request.granted else 'withdrawn'}",
+            "consent_type": request.consent_type,
+            "granted": request.granted,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Consent recording error: {str(e)}")
+
+@api_router.get("/gdpr/consent")
+async def get_user_consent_status(user: User = Depends(require_auth)):
+    """Get user's current consent status"""
+    try:
+        consent_status = data_protection_manager.get_user_consent(user.id)
+        
+        return {
+            "success": True,
+            "user_id": user.id,
+            "consent_status": consent_status,
+            "gdpr_compliant": True
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Get consent error: {str(e)}")
+
+@api_router.post("/gdpr/export")
+async def export_user_data(user: User = Depends(require_auth)):
+    """Export user data for GDPR data portability"""
+    try:
+        export_data = data_protection_manager.create_data_export(user.id)
+        
+        if "error" in export_data:
+            raise HTTPException(status_code=500, detail=export_data["error"])
+        
+        return {
+            "success": True,
+            "export_data": export_data,
+            "data_categories": list(export_data.get("data", {}).keys()),
+            "export_timestamp": export_data.get("export_timestamp"),
+            "user_id": user.id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Data export error: {str(e)}")
+
+@api_router.post("/gdpr/delete")
+async def delete_user_data(request: DataDeletionRequest, admin_user: User = Depends(require_auth)):
+    """Delete user data for GDPR right to erasure (admin only)"""
+    try:
+        # Check admin permissions
+        admin_permissions = enhanced_auth_manager.get_user_permissions(admin_user.role)
+        if Permission.MANAGE_USERS not in admin_permissions:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        deletion_result = data_protection_manager.delete_user_data(request.user_id, request.reason)
+        
+        if not deletion_result.get("success"):
+            raise HTTPException(status_code=500, detail=deletion_result.get("error", "Data deletion failed"))
+        
+        return deletion_result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Data deletion error: {str(e)}")
+
+@api_router.post("/gdpr/request")
+async def create_data_request(request: DataRequestModel, user: User = Depends(require_auth)):
+    """Create GDPR data request (export, deletion, rectification)"""
+    try:
+        request_id = data_protection_manager.create_data_request(
+            user.id, request.request_type, request.details
+        )
+        
+        if not request_id:
+            raise HTTPException(status_code=500, detail="Failed to create data request")
+        
+        return {
+            "success": True,
+            "request_id": request_id,
+            "request_type": request.request_type,
+            "status": "pending",
+            "user_id": user.id,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Data request error: {str(e)}")
+
+@api_router.get("/gdpr/requests")
+async def get_user_data_requests(user: User = Depends(require_auth)):
+    """Get user's data requests"""
+    try:
+        requests = data_protection_manager.get_data_requests(user.id)
+        
+        return {
+            "success": True,
+            "requests": requests,
+            "total_requests": len(requests),
+            "user_id": user.id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Get requests error: {str(e)}")
+
+@api_router.get("/gdpr/audit-log")
+async def get_user_audit_log(limit: int = 50, user: User = Depends(require_auth)):
+    """Get user's audit log"""
+    try:
+        audit_log = data_protection_manager.get_audit_log(user.id, limit)
+        
+        return {
+            "success": True,
+            "audit_log": audit_log,
+            "total_entries": len(audit_log),
+            "user_id": user.id,
+            "limit": limit
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Audit log error: {str(e)}")
+
+@api_router.get("/gdpr/retention-policies")
+async def get_data_retention_policies():
+    """Get data retention policies"""
+    try:
+        policies = data_protection_manager.get_data_retention_info()
+        
+        return {
+            "success": True,
+            "retention_policies": policies,
+            "gdpr_compliant": True,
+            "last_updated": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Retention policies error: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
