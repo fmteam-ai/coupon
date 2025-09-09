@@ -54,6 +54,8 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [categories, setCategories] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [showVoiceAssistant, setShowVoiceAssistant] = useState(false);
+  const [voiceDeals, setVoiceDeals] = useState<any[]>([]);
   const { session_id } = useGlobalSearchParams();
 
   const categories_list = [
