@@ -56,6 +56,64 @@ interface UserLocation {
   longitude: number;
 }
 
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  TextInput,
+  Modal,
+  Dimensions,
+  ScrollView,
+  Platform
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
+import { getDistance } from 'geolib';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const EXPO_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const { width, height } = Dimensions.get('window');
+
+interface Business {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  rating: number;
+  review_count: number;
+  logo?: string;
+  latitude?: number;
+  longitude?: number;
+  address: string;
+  city: string;
+  country: string;
+  phone: string;
+}
+
+interface Discount {
+  discount: {
+    id: string;
+    title: string;
+    description: string;
+    discount_type: string;
+    discount_value: number;
+    expires_at: string;
+  };
+  business: Business;
+}
+
+interface UserLocation {
+  latitude: number;
+  longitude: number;
+}
+
 export default function MapPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
@@ -67,8 +125,6 @@ export default function MapPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
-  
-  const mapRef = useRef<MapView>(null);
   
   const categories = [
     'All', 'Restaurant', 'Retail', 'Health & Beauty', 'Services', 
@@ -120,13 +176,18 @@ export default function MapPage() {
     try {
       setLoading(true);
       
-      // Load businesses
+      // Load businesses with location filtering
       const businessQuery = new URLSearchParams();
       if (selectedCategory && selectedCategory !== 'All') {
         businessQuery.append('category', selectedCategory);
       }
       if (searchQuery) {
         businessQuery.append('search', searchQuery);
+      }
+      if (userLocation) {
+        businessQuery.append('latitude', userLocation.latitude.toString());
+        businessQuery.append('longitude', userLocation.longitude.toString());
+        businessQuery.append('radius_km', distanceFilter.toString());
       }
 
       const businessResponse = await fetch(
@@ -139,24 +200,20 @@ export default function MapPage() {
         ...business,
         latitude: userLocation!.latitude + (Math.random() - 0.5) * 0.1,
         longitude: userLocation!.longitude + (Math.random() - 0.5) * 0.1,
+        distance_km: Math.random() * distanceFilter, // Mock distance
       }));
 
-      // Filter by distance
-      const filteredBusinesses = businessesWithLocation.filter((business: Business) => {
-        if (!userLocation) return true;
-        const distance = getDistance(
-          { latitude: userLocation.latitude, longitude: userLocation.longitude },
-          { latitude: business.latitude!, longitude: business.longitude! }
-        ) / 1000; // Convert to km
-        return distance <= distanceFilter;
-      });
+      setBusinesses(businessesWithLocation);
 
-      setBusinesses(filteredBusinesses);
-
-      // Load discounts
+      // Load discounts with location filtering
       const discountQuery = new URLSearchParams();
       if (selectedCategory && selectedCategory !== 'All') {
         discountQuery.append('category', selectedCategory);
+      }
+      if (userLocation) {
+        discountQuery.append('latitude', userLocation.latitude.toString());
+        discountQuery.append('longitude', userLocation.longitude.toString());
+        discountQuery.append('radius_km', distanceFilter.toString());
       }
 
       const discountResponse = await fetch(
@@ -190,17 +247,6 @@ export default function MapPage() {
     }
   };
 
-  const centerOnUser = () => {
-    if (userLocation && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: userLocation.latitude,
-        longitude: userLocation.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      }, 1000);
-    }
-  };
-
   const getMarkerColor = (category: string, hasDiscount: boolean = false) => {
     if (hasDiscount) return '#FF3B30'; // Red for discounts
     
@@ -220,7 +266,7 @@ export default function MapPage() {
     return categoryColors[category] || '#8E8E93';
   };
 
-  const handleMarkerPress = (business: Business) => {
+  const handleBusinessPress = (business: Business) => {
     setSelectedBusiness(business);
   };
 
@@ -237,12 +283,10 @@ export default function MapPage() {
   };
 
   const getBusinessDistance = (business: Business) => {
-    if (!userLocation || !business.latitude || !business.longitude) return null;
-    const distance = getDistance(
-      { latitude: userLocation.latitude, longitude: userLocation.longitude },
-      { latitude: business.latitude, longitude: business.longitude }
-    );
-    return distance < 1000 ? `${distance}m` : `${(distance / 1000).toFixed(1)}km`;
+    if (business.distance_km !== undefined) {
+      return business.distance_km < 1 ? `${(business.distance_km * 1000).toFixed(0)}m` : `${business.distance_km.toFixed(1)}km`;
+    }
+    return null;
   };
 
   if (locationPermission === null) {
@@ -281,7 +325,7 @@ export default function MapPage() {
           onChangeText={setSearchQuery}
           placeholderTextColor="#999"
         />
-        <TouchableOpacity onPress={centerOnUser} style={styles.locationButton}>
+        <TouchableOpacity style={styles.locationButton}>
           <Ionicons name="locate-outline" size={18} color="#007AFF" />
         </TouchableOpacity>
       </View>
@@ -294,144 +338,119 @@ export default function MapPage() {
         </Text>
       </View>
 
-      {/* Map */}
-      <View style={styles.mapContainer}>
-        {userLocation ? (
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            provider={PROVIDER_GOOGLE}
-            initialRegion={{
-              latitude: userLocation.latitude,
-              longitude: userLocation.longitude,
-              latitudeDelta: 0.05,
-              longitudeDelta: 0.05,
-            }}
-            showsUserLocation={locationPermission === true}
-            showsMyLocationButton={false}
-          >
-            {/* Distance Circle */}
-            {userLocation && (
-              <Circle
-                center={userLocation}
-                radius={distanceFilter * 1000} // Convert km to meters
-                strokeColor="rgba(0, 122, 255, 0.3)"
-                fillColor="rgba(0, 122, 255, 0.1)"
-                strokeWidth={2}
-              />
-            )}
-
-            {/* Business markers */}
-            {businesses.map((business) => (
-              <Marker
-                key={business.id}
-                coordinate={{
-                  latitude: business.latitude!,
-                  longitude: business.longitude!,
-                }}
-                pinColor={getMarkerColor(business.category)}
-                onPress={() => handleMarkerPress(business)}
-              >
-                <View style={[styles.customMarker, { backgroundColor: getMarkerColor(business.category) }]}>
-                  <Ionicons name="business-outline" size={16} color="#fff" />
-                </View>
-              </Marker>
-            ))}
-
-            {/* Discount markers */}
-            {discounts.map((item, index) => {
-              const business = {
-                ...item.business,
-                latitude: userLocation.latitude + (Math.random() - 0.5) * 0.1,
-                longitude: userLocation.longitude + (Math.random() - 0.5) * 0.1,
-              };
-              return (
-                <Marker
-                  key={`discount-${index}`}
-                  coordinate={{
-                    latitude: business.latitude,
-                    longitude: business.longitude,
-                  }}
-                  onPress={() => handleMarkerPress(business)}
-                >
-                  <View style={[styles.discountMarker]}>
-                    <Ionicons name="pricetag" size={16} color="#fff" />
-                    <Text style={styles.discountText}>
-                      {item.discount.discount_type === 'percentage' 
-                        ? `${item.discount.discount_value}%`
-                        : `$${item.discount.discount_value}`
-                      }
-                    </Text>
-                  </View>
-                </Marker>
-              );
-            })}
-          </MapView>
-        ) : (
+      {/* Map Placeholder / Business List */}
+      <ScrollView style={styles.mapContainer} showsVerticalScrollIndicator={false}>
+        {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.loadingText}>Loading map...</Text>
-          </View>
-        )}
-
-        {/* Loading Overlay */}
-        {loading && (
-          <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color="#007AFF" />
             <Text style={styles.loadingText}>Loading businesses...</Text>
           </View>
-        )}
-      </View>
+        ) : (
+          <>
+            {/* Map Placeholder */}
+            <View style={styles.mapPlaceholder}>
+              <Ionicons name="map-outline" size={48} color="#666" />
+              <Text style={styles.mapPlaceholderText}>Interactive Map</Text>
+              <Text style={styles.mapPlaceholderSubtext}>
+                In a native app, this would show an interactive map with business markers
+              </Text>
+            </View>
 
-      {/* Business Info Card */}
-      {selectedBusiness && (
-        <View style={styles.businessCard}>
-          <View style={styles.businessCardHeader}>
-            <View style={styles.businessInfo}>
-              <Text style={styles.businessName}>{selectedBusiness.name}</Text>
-              <Text style={styles.businessCategory}>{selectedBusiness.category}</Text>
-              <View style={styles.ratingContainer}>
-                {[...Array(5)].map((_, i) => (
-                  <Ionicons
-                    key={i}
-                    name={i < Math.floor(selectedBusiness.rating) ? "star" : "star-outline"}
-                    size={14}
-                    color="#FFD700"
-                  />
-                ))}
-                <Text style={styles.ratingText}>
-                  {selectedBusiness.rating.toFixed(1)} ({selectedBusiness.review_count})
-                </Text>
-              </View>
-              {getBusinessDistance(selectedBusiness) && (
-                <Text style={styles.distanceText}>
-                  📍 {getBusinessDistance(selectedBusiness)} away
-                </Text>
+            {/* Businesses List */}
+            <View style={styles.businessSection}>
+              <Text style={styles.sectionTitle}>
+                Nearby Businesses ({businesses.length})
+              </Text>
+              
+              {businesses.map((business) => (
+                <TouchableOpacity
+                  key={business.id}
+                  style={styles.businessCard}
+                  onPress={() => handleBusinessPress(business)}
+                >
+                  <View style={styles.businessContent}>
+                    <View style={[styles.categoryIndicator, { backgroundColor: getMarkerColor(business.category) }]} />
+                    <View style={styles.businessDetails}>
+                      <Text style={styles.businessName}>{business.name}</Text>
+                      <Text style={styles.businessCategory}>{business.category}</Text>
+                      <Text style={styles.businessDescription} numberOfLines={2}>
+                        {business.description}
+                      </Text>
+                      <View style={styles.businessMeta}>
+                        <View style={styles.ratingContainer}>
+                          {[...Array(5)].map((_, i) => (
+                            <Ionicons
+                              key={i}
+                              name={i < Math.floor(business.rating) ? "star" : "star-outline"}
+                              size={14}
+                              color="#FFD700"
+                            />
+                          ))}
+                          <Text style={styles.ratingText}>
+                            {business.rating.toFixed(1)} ({business.review_count})
+                          </Text>
+                        </View>
+                        {getBusinessDistance(business) && (
+                          <Text style={styles.distanceText}>
+                            📍 {getBusinessDistance(business)} away
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.viewButton}
+                      onPress={() => navigateToBusiness(business.id)}
+                    >
+                      <Text style={styles.viewButtonText}>View</Text>
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              ))}
+
+              {/* Discounts Section */}
+              {discounts.length > 0 && (
+                <>
+                  <Text style={styles.sectionTitle}>
+                    🎯 Hot Deals Nearby ({discounts.length})
+                  </Text>
+                  
+                  {discounts.map((item, index) => (
+                    <TouchableOpacity
+                      key={`discount-${index}`}
+                      style={styles.discountCard}
+                      onPress={() => router.push({
+                        pathname: '/business/[id]',
+                        params: { id: item.business.id }
+                      })}
+                    >
+                      <View style={styles.discountContent}>
+                        <View style={styles.discountBadge}>
+                          <Text style={styles.discountValue}>
+                            {item.discount.discount_type === 'percentage' 
+                              ? `${item.discount.discount_value}% OFF`
+                              : `$${item.discount.discount_value} OFF`
+                            }
+                          </Text>
+                        </View>
+                        <View style={styles.discountDetails}>
+                          <Text style={styles.discountTitle}>{item.discount.title}</Text>
+                          <Text style={styles.discountBusiness}>{item.business.name}</Text>
+                          <Text style={styles.discountDescription} numberOfLines={2}>
+                            {item.discount.description}
+                          </Text>
+                          <Text style={styles.expiryText}>
+                            Expires: {new Date(item.discount.expires_at).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </>
               )}
             </View>
-            <TouchableOpacity onPress={closeBusinessCard} style={styles.closeButton}>
-              <Ionicons name="close" size={20} color="#666" />
-            </TouchableOpacity>
-          </View>
-          
-          <Text style={styles.businessDescription} numberOfLines={2}>
-            {selectedBusiness.description}
-          </Text>
-          
-          <View style={styles.businessCardActions}>
-            <TouchableOpacity
-              style={styles.viewButton}
-              onPress={() => navigateToBusiness(selectedBusiness.id)}
-            >
-              <Text style={styles.viewButtonText}>View Details</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.directionsButton}>
-              <Ionicons name="navigate-outline" size={16} color="#007AFF" />
-              <Text style={styles.directionsText}>Directions</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+          </>
+        )}
+      </ScrollView>
 
       {/* Filter Modal */}
       <Modal
