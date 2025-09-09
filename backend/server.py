@@ -3468,6 +3468,149 @@ async def voice_feedback(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error storing feedback: {str(e)}")
 
+# ============================================================================
+# HYPER-PERSONALIZATION ENGINE
+# ============================================================================
+
+from personalization_engine import personalization_engine
+
+@api_router.post("/api/personalization/track")
+async def track_user_behavior(request: Request):
+    """Track user behavior for personalization"""
+    data = await request.json()
+    
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    action = data.get("action")  # view, share, redeem, rate, search, voice_query
+    behavior_data = data.get("data", {})
+    
+    if not action:
+        raise HTTPException(status_code=400, detail="Action is required")
+    
+    try:
+        await personalization_engine.track_user_behavior(user["id"], action, behavior_data)
+        return {"success": True, "message": "Behavior tracked successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error tracking behavior: {str(e)}")
+
+@api_router.get("/api/personalization/recommendations")
+async def get_personalized_recommendations(request: Request):
+    """Get personalized deal recommendations"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Get query parameters
+    limit = int(request.query_params.get("limit", 10))
+    
+    # Get context from request (location, weather, etc.)
+    context = {}
+    if "latitude" in request.query_params and "longitude" in request.query_params:
+        context["latitude"] = float(request.query_params["latitude"])
+        context["longitude"] = float(request.query_params["longitude"])
+    
+    if "weather" in request.query_params:
+        context["weather"] = request.query_params["weather"]
+    
+    try:
+        recommendations = await personalization_engine.get_personalized_recommendations(
+            user_id=user["id"],
+            context=context,
+            limit=limit
+        )
+        
+        return {
+            "success": True,
+            "recommendations": recommendations,
+            "count": len(recommendations),
+            "personalized": True
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting recommendations: {str(e)}")
+
+@api_router.get("/api/personalization/predictions")
+async def get_predictive_recommendations(request: Request):
+    """Get predictive recommendations based on user patterns"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    prediction_context = request.query_params.get("context", "next_hour")
+    
+    try:
+        predictions = await personalization_engine.get_predictive_recommendations(
+            user_id=user["id"],
+            prediction_context=prediction_context
+        )
+        
+        return {
+            "success": True,
+            "predictions": predictions,
+            "count": len(predictions),
+            "context": prediction_context
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting predictions: {str(e)}")
+
+@api_router.get("/api/personalization/insights")
+async def get_user_insights(request: Request):
+    """Get user behavior insights and preferences"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        # Get user profile
+        profile = db.user_profiles.find_one({"user_id": user["id"]})
+        
+        if not profile:
+            return {
+                "success": True,
+                "insights": {
+                    "message": "Keep using the app to build your personalized profile!",
+                    "preferences": {},
+                    "behavior_score": 0,
+                    "recommendations": "Try exploring different categories to help us learn your preferences"
+                }
+            }
+        
+        preferences = profile.get("preferences", {})
+        
+        # Generate insights
+        insights = {
+            "message": "Here's what we learned about your preferences",
+            "top_categories": sorted(
+                preferences.get("categories", {}).items(), 
+                key=lambda x: x[1], 
+                reverse=True
+            )[:3],
+            "favorite_keywords": sorted(
+                preferences.get("keywords", {}).items(), 
+                key=lambda x: x[1], 
+                reverse=True
+            )[:5],
+            "active_times": sorted(
+                preferences.get("time_patterns", {}).items(), 
+                key=lambda x: x[1], 
+                reverse=True
+            ),
+            "behavior_score": profile.get("behavior_score", 0),
+            "profile_strength": "Strong" if profile.get("behavior_score", 0) > 50 else "Growing" if profile.get("behavior_score", 0) > 10 else "New"
+        }
+        
+        return {
+            "success": True,
+            "insights": insights
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting insights: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
