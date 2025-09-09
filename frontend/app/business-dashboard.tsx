@@ -257,9 +257,9 @@ export default function BusinessDashboardPage() {
         showsVerticalScrollIndicator={false}
       >
         {/* Business Name */}
-        {analytics && (
+        {usageAnalytics && (
           <View style={styles.businessHeader}>
-            <Text style={styles.businessName}>{analytics.business_name}</Text>
+            <Text style={styles.businessName}>{usageAnalytics.business_name}</Text>
           </View>
         )}
 
