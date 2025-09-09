@@ -151,6 +151,13 @@ export default function RootLayout() {
           href: null, // Hide from tab bar
         }}
       />
+      
+      <Tabs.Screen
+        name="business-subscription"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
 
       {/* Dynamic routes */}
       <Tabs.Screen
