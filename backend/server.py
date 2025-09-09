@@ -400,6 +400,29 @@ class PaymentIntent(BaseModel):
     plan_id: str
     business_id: str
 
+# Push Notification Models
+class PushTokenRequest(BaseModel):
+    pushToken: str
+
+class QuickDealRequest(BaseModel):
+    title: str
+    description: str
+    discount: int
+    validUntil: Optional[str] = None
+    active: bool = True
+    maxRedemptions: Optional[int] = None
+
+class DealAlertRequest(BaseModel):
+    dealId: str
+    radius: Optional[int] = 1000
+
+class NotificationMetric(BaseModel):
+    action: str  # "received", "tapped"
+    type: str  # "deal", "nearby", "recommendation"
+    dealId: Optional[str] = None
+    businessId: Optional[str] = None
+    timestamp: str
+
 # Utility Functions
 def generate_verification_code() -> str:
     return ''.join(random.choices(string.digits, k=6))
