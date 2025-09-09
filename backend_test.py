@@ -35,6 +35,7 @@ class BackendTester:
             'cashback_system': {'passed': 0, 'failed': 0, 'errors': []},
             'geofencing': {'passed': 0, 'failed': 0, 'errors': []},
             'business_analytics': {'passed': 0, 'failed': 0, 'errors': []},
+            'dynamic_pricing': {'passed': 0, 'failed': 0, 'errors': []},
         }
         self.session_token = None
         self.test_user_id = None
