@@ -1423,6 +1423,22 @@ async def register_business(business_data: BusinessRegistration, user: User = De
         
         await db.business_subscriptions.insert_one(trial_subscription.dict())
         
+        # Send email verification after successful registration
+        verification_code = ''.join(random.choices(string.digits, k=6))
+        verification_data = BusinessEmailVerification(
+            business_id=business.id,
+            email=business_data.email,
+            verification_code=verification_code
+        )
+        await db.business_email_verifications.insert_one(verification_data.dict())
+        
+        # Send verification email
+        await send_business_verification_email(
+            business_data.email, 
+            verification_code, 
+            business_data.name
+        )
+        
         return {
             "success": True, 
             "business_id": business.id, 
@@ -1430,6 +1446,8 @@ async def register_business(business_data: BusinessRegistration, user: User = De
             "trial_eligible": eligibility["trial_eligible"],
             "message": subscription_message,
             "requires_admin_approval": True,
+            "requires_email_verification": True,
+            "verification_email_sent": True,
             "upgrade_required": not eligibility["trial_eligible"]
         }
         
