@@ -441,6 +441,40 @@ export default function HomePage() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Footer Links */}
+        <View style={styles.footerSection}>
+          <Text style={styles.footerTitle}>Legal & Support</Text>
+          <View style={styles.footerLinks}>
+            <TouchableOpacity
+              style={styles.footerLink}
+              onPress={() => router.push('/privacy-policy')}
+            >
+              <Ionicons name="shield-checkmark-outline" size={16} color="#666" />
+              <Text style={styles.footerLinkText}>Privacy Policy</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.footerLink}
+              onPress={() => router.push('/terms-of-use')}
+            >
+              <Ionicons name="document-text-outline" size={16} color="#666" />
+              <Text style={styles.footerLinkText}>Terms of Use</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.footerLink}
+              onPress={() => router.push('/business-terms')}
+            >
+              <Ionicons name="briefcase-outline" size={16} color="#666" />
+              <Text style={styles.footerLinkText}>Business Terms</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <Text style={styles.footerCopyright}>
+            © 2025 CouponApp. All rights reserved.
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
