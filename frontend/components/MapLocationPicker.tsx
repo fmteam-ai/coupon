@@ -205,50 +205,26 @@ export default function MapLocationPicker({
 
         {/* Map */}
         <View style={styles.mapContainer}>
-          {Platform.OS !== 'web' && MapComponent && MarkerComponent ? (
-            <MapComponent
-              style={styles.map}
-              region={region}
-              onRegionChangeComplete={setRegion}
-              onPress={handleMapPress}
-              showsUserLocation={locationPermission}
-              showsMyLocationButton={false}
-              toolbarEnabled={false}
-            >
-              {selectedLocation && (
-                <MarkerComponent
-                  coordinate={{
-                    latitude: selectedLocation.latitude,
-                    longitude: selectedLocation.longitude,
-                  }}
-                  title="Business Location"
-                  description={selectedLocation.address || "Selected location"}
-                  pinColor="#007AFF"
-                />
-              )}
-            </MapComponent>
-          ) : (
-            // Web fallback: Show a placeholder with location coordinates
-            <View style={styles.webMapPlaceholder}>
-              <Ionicons name="map" size={64} color="#ccc" />
-              <Text style={styles.webMapText}>Map View</Text>
-              <Text style={styles.webMapSubtext}>
-                Interactive map is available on mobile devices
-              </Text>
-              {selectedLocation && (
-                <View style={styles.webLocationInfo}>
-                  <Text style={styles.webLocationText}>
-                    📍 Selected Location: {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}
+          {/* Web and mobile compatible location picker */}
+          <View style={styles.webMapPlaceholder}>
+            <Ionicons name="map" size={64} color="#ccc" />
+            <Text style={styles.webMapText}>Location Picker</Text>
+            <Text style={styles.webMapSubtext}>
+              Use the "Get Current Location" button below to set your location
+            </Text>
+            {selectedLocation && (
+              <View style={styles.webLocationInfo}>
+                <Text style={styles.webLocationText}>
+                  📍 Selected Location: {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}
+                </Text>
+                {selectedLocation.address && (
+                  <Text style={styles.webLocationAddress}>
+                    {selectedLocation.address}
                   </Text>
-                  {selectedLocation.address && (
-                    <Text style={styles.webLocationAddress}>
-                      {selectedLocation.address}
-                    </Text>
-                  )}
-                </View>
-              )}
-            </View>
-          )}
+                )}
+              </View>
+            )}
+          </View>
 
           {/* Map Controls */}
           <View style={styles.mapControls}>
