@@ -37,6 +37,7 @@ interface MapLocationPickerProps {
   onClose: () => void;
   onLocationSelected: (location: LocationData) => void;
   initialLocation?: LocationData;
+  initialAddress?: string;
   title?: string;
 }
 
