@@ -4228,57 +4228,78 @@ async def validate_input_data(request: Request):
         
         validation_results = {
             "success": True,
-            "validations": {},
-            "warnings": [],
-            "errors": []
+            "validation_results": {
+                "validations": {},
+                "warnings": [],
+                "errors": [],
+                "threat_detection": {
+                    "sql_injection": False,
+                    "xss_attack": False,
+                    "path_traversal": False,
+                    "command_injection": False,
+                    "nosql_injection": False
+                }
+            }
         }
         
         # Validate different types of data
         if "email" in data:
             email_valid = security_validator.validate_email(data["email"])
-            validation_results["validations"]["email"] = {
+            validation_results["validation_results"]["validations"]["email"] = {
                 "valid": email_valid,
                 "value": data["email"]
             }
             if not email_valid:
-                validation_results["errors"].append("Invalid email format")
+                validation_results["validation_results"]["errors"].append("Invalid email format")
         
         if "phone" in data:
             phone_valid = security_validator.validate_phone(data["phone"])
-            validation_results["validations"]["phone"] = {
+            validation_results["validation_results"]["validations"]["phone"] = {
                 "valid": phone_valid,
                 "value": data["phone"]
             }
             if not phone_valid:
-                validation_results["errors"].append("Invalid phone number format")
+                validation_results["validation_results"]["errors"].append("Invalid phone number format")
         
         if "latitude" in data and "longitude" in data:
             coords_valid = security_validator.validate_coordinates(
                 float(data["latitude"]), float(data["longitude"])
             )
-            validation_results["validations"]["coordinates"] = {
+            validation_results["validation_results"]["validations"]["coordinates"] = {
                 "valid": coords_valid,
                 "latitude": data["latitude"],
                 "longitude": data["longitude"]
             }
             if not coords_valid:
-                validation_results["errors"].append("Invalid GPS coordinates")
+                validation_results["validation_results"]["errors"].append("Invalid GPS coordinates")
         
         if "image_data" in data:
             image_valid = security_validator.validate_image_data(data["image_data"])
-            validation_results["validations"]["image_data"] = {
+            validation_results["validation_results"]["validations"]["image_data"] = {
                 "valid": image_valid,
                 "size_mb": len(data["image_data"]) / (1024 * 1024) if image_valid else 0
             }
             if not image_valid:
-                validation_results["errors"].append("Invalid or oversized image data")
+                validation_results["validation_results"]["errors"].append("Invalid or oversized image data")
         
-        # Check for suspicious patterns
+        # Check for suspicious patterns and update threat detection
         for key, value in data.items():
             if isinstance(value, str) and security_validator.check_suspicious_content(value):
-                validation_results["warnings"].append(f"Suspicious pattern detected in {key}")
+                validation_results["validation_results"]["warnings"].append(f"Suspicious pattern detected in {key}")
+                # Update specific threat detection flags
+                content_lower = value.lower()
+                if any(pattern in content_lower for pattern in ["union", "select", "insert", "delete", "drop"]):
+                    validation_results["validation_results"]["threat_detection"]["sql_injection"] = True
+                if any(pattern in content_lower for pattern in ["<script", "javascript:", "on"]):
+                    validation_results["validation_results"]["threat_detection"]["xss_attack"] = True
+                if any(pattern in content_lower for pattern in ["../", "..\\"]):
+                    validation_results["validation_results"]["threat_detection"]["path_traversal"] = True
+                if any(pattern in content_lower for pattern in ["exec", "system", "eval", "|", "&&"]):
+                    validation_results["validation_results"]["threat_detection"]["command_injection"] = True
+                if any(pattern in content_lower for pattern in ["$where", "$ne", "$gt", "$regex"]):
+                    validation_results["validation_results"]["threat_detection"]["nosql_injection"] = True
         
-        validation_results["success"] = len(validation_results["errors"]) == 0
+        validation_results["success"] = len(validation_results["validation_results"]["errors"]) == 0
         
         return validation_results
         
