@@ -298,22 +298,46 @@ export default function MapLocationPicker({
 
         {/* Map */}
         <View style={styles.mapContainer}>
-          {/* Web and mobile compatible location picker */}
+          {/* Web and mobile compatible location picker with enhanced features */}
           <View style={styles.webMapPlaceholder}>
             <Ionicons name="map" size={64} color="#ccc" />
-            <Text style={styles.webMapText}>Location Picker</Text>
+            <Text style={styles.webMapText}>Enhanced Location Picker</Text>
             <Text style={styles.webMapSubtext}>
-              Use the "Get Current Location" button below to set your location
+              {geocodingAddress ? 'Finding exact location...' : 'Use the buttons below to set your precise business location'}
             </Text>
+            {geocodingAddress && (
+              <ActivityIndicator size="small" color="#007AFF" style={{ marginTop: 8 }} />
+            )}
             {selectedLocation && (
               <View style={styles.webLocationInfo}>
                 <Text style={styles.webLocationText}>
                   📍 Selected Location: {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}
                 </Text>
-                {selectedLocation.address && (
+                {selectedLocation.formattedAddress && (
                   <Text style={styles.webLocationAddress}>
-                    {selectedLocation.address}
+                    {selectedLocation.formattedAddress}
                   </Text>
+                )}
+                {/* Enhanced Address Breakdown */}
+                {(selectedLocation.city || selectedLocation.postalCode || selectedLocation.state) && (
+                  <View style={styles.addressBreakdown}>
+                    <Text style={styles.addressBreakdownTitle}>Address Components:</Text>
+                    {selectedLocation.address && (
+                      <Text style={styles.addressComponent}>Street: {selectedLocation.address}</Text>
+                    )}
+                    {selectedLocation.city && (
+                      <Text style={styles.addressComponent}>City: {selectedLocation.city}</Text>
+                    )}
+                    {selectedLocation.postalCode && (
+                      <Text style={styles.addressComponent}>Postal Code: {selectedLocation.postalCode}</Text>
+                    )}
+                    {selectedLocation.state && (
+                      <Text style={styles.addressComponent}>State: {selectedLocation.state}</Text>
+                    )}
+                    {selectedLocation.country && (
+                      <Text style={styles.addressComponent}>Country: {selectedLocation.country}</Text>
+                    )}
+                  </View>
                 )}
               </View>
             )}
