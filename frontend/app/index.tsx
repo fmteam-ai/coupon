@@ -158,6 +158,17 @@ export default function HomePage() {
   };
 
 
+  const handleVoiceDealsFound = (deals: any[]) => {
+    setVoiceDeals(deals);
+    setShowVoiceAssistant(false);
+    // Optionally show a success message
+    Alert.alert(
+      '🎤 Voice Search Complete',
+      `Found ${deals.length} deals matching your request!`,
+      [{ text: 'OK' }]
+    );
+  };
+
   const handleLogin = () => {
     const authUrl = `https://demobackend.emergentagent.com/auth/v1/env/oauth?_redirect_uri=${encodeURIComponent('https://couponmobile.preview.emergentagent.com/')}`;
     router.push(authUrl as any);
