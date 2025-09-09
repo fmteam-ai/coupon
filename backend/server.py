@@ -571,15 +571,12 @@ async def generate_ai_recommendations(user_id: str) -> List[Dict[str, Any]]:
         """
         
         # Call AI service
-        response = await llm_client.generate_async(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1000,
-            temperature=0.3
-        )
+        from emergentintegrations.llm.chat import UserMessage
+        user_message = UserMessage(text=prompt)
+        response = llm_client.with_model("gpt-4o-mini").send_message(user_message)
         
         # Parse AI response
-        ai_recommendations = json.loads(response.choices[0].message.content)
+        ai_recommendations = json.loads(response)
         
         # Store recommendations in database
         recommendations = []
