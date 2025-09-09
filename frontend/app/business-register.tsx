@@ -274,12 +274,11 @@ export default function BusinessRegisterPage() {
 
               <View style={[styles.inputGroup, styles.flex1, styles.marginLeft]}>
                 <Text style={styles.label}>Country *</Text>
-                <TextInput
+                <CountrySelector
+                  selectedCountryCode={formData.country}
+                  onCountrySelect={handleCountrySelect}
+                  placeholder="Select Country"
                   style={styles.input}
-                  value={formData.country}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, country: text }))}
-                  placeholder="USA"
-                  placeholderTextColor="#999"
                 />
               </View>
             </View>
