@@ -102,6 +102,27 @@ export default function BusinessDashboardPage() {
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [upgrading, setUpgrading] = useState(false);
 
+  // New state for real-time features
+  const [realTimeMetrics, setRealTimeMetrics] = useState<RealTimeMetrics>({
+    activeDeals: 0,
+    todayRedemptions: 0,
+    nearbyCustomers: 0,
+    liveViews: 0,
+    revenueToday: 0,
+    averageRating: 0,
+    lastUpdate: new Date().toISOString(),
+  });
+  const [quickDealModalVisible, setQuickDealModalVisible] = useState(false);
+  const [quickDeal, setQuickDeal] = useState<QuickDeal>({
+    title: '',
+    description: '',
+    discount: 0,
+    validUntil: '',
+    active: true,
+  });
+  const [creatingDeal, setCreatingDeal] = useState(false);
+  const [realtimeInterval, setRealtimeInterval] = useState<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     fetchData();
   }, []);
