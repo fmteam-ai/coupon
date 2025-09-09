@@ -402,6 +402,30 @@ export default function BusinessRegisterPage() {
               </View>
 
               <View style={[styles.inputGroup, styles.flex1, styles.marginLeft]}>
+                <Text style={styles.label}>Postal Code</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.postalCode}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, postalCode: text }))}
+                  placeholder="10001"
+                  placeholderTextColor="#999"
+                />
+              </View>
+            </View>
+
+            <View style={styles.row}>
+              <View style={[styles.inputGroup, styles.flex1]}>
+                <Text style={styles.label}>State/Region</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.state}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, state: text }))}
+                  placeholder="New York"
+                  placeholderTextColor="#999"
+                />
+              </View>
+
+              <View style={[styles.inputGroup, styles.flex1, styles.marginLeft]}>
                 <Text style={styles.label}>{t.businessRegistration.country} *</Text>
                 <CountrySelector
                   selectedCountryCode={formData.country}
