@@ -269,14 +269,22 @@ export default function BusinessRegisterPage() {
 
           {/* Location Information */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Location</Text>
+            <Text style={styles.sectionTitle}>📍 Business Location</Text>
+            <Text style={styles.locationSubtitle}>
+              Enter your address below and confirm your exact location on the map
+            </Text>
             
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Address *</Text>
               <TextInput
                 style={styles.input}
                 value={formData.address}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, address: text }))}
+                onChangeText={(text) => {
+                  setFormData(prev => ({ ...prev, address: text }));
+                  if (text.length > 10) {
+                    setShowMapForAddress(true);
+                  }
+                }}
                 placeholder="123 Main Street"
                 placeholderTextColor="#999"
               />
@@ -303,6 +311,54 @@ export default function BusinessRegisterPage() {
                   style={styles.input}
                 />
               </View>
+            </View>
+
+            {/* Interactive Map Location Picker */}
+            {showMapForAddress && (
+              <View style={styles.mapSection}>
+                <View style={styles.mapHeader}>
+                  <Text style={styles.mapTitle}>📍 Confirm Your Location</Text>
+                  <Text style={styles.mapSubtitle}>
+                    Drag the pin to your exact business location
+                  </Text>
+                </View>
+                
+                <View style={styles.mapContainer}>
+                  <MapLocationPicker
+                    onLocationSelect={handleMapLocationSelect}
+                    initialAddress={`${formData.address}, ${formData.city}`}
+                    style={styles.mapPicker}
+                  />
+                </View>
+                
+                <View style={styles.mapActions}>
+                  <TouchableOpacity 
+                    style={styles.mapActionButton}
+                    onPress={getCurrentLocation}
+                  >
+                    <Ionicons name="navigate" size={16} color="#007AFF" />
+                    <Text style={styles.mapActionText}>Use Current Location</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.mapActionButton}
+                    onPress={() => setShowMapForAddress(false)}
+                  >
+                    <Ionicons name="close" size={16} color="#666" />
+                    <Text style={[styles.mapActionText, {color: '#666'}]}>Hide Map</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {locationCoordinates && (
+                  <View style={styles.locationConfirmed}>
+                    <Ionicons name="checkmark-circle" size={20} color="#34C759" />
+                    <Text style={styles.locationConfirmedText}>
+                      Location confirmed: {locationCoordinates.latitude.toFixed(6)}, {locationCoordinates.longitude.toFixed(6)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
             </View>
             
             {/* Language Selection */}
