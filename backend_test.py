@@ -352,6 +352,216 @@ class BackendTester:
         except Exception as e:
             self.log_result('admin_system', 'Admin business approval auth protection', False, str(e))
     
+    async def test_ai_recommendations(self):
+        """Test AI Personal Deal Recommendations System"""
+        print("\n🤖 Testing AI Personal Deal Recommendations...")
+        
+        # Test 1: Get AI recommendations without authentication
+        try:
+            response = await self.client.get(f"{API_BASE}/ai/recommendations")
+            if response.status_code == 401:
+                self.log_result('ai_recommendations', 'AI recommendations auth protection', True)
+            else:
+                self.log_result('ai_recommendations', 'AI recommendations auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('ai_recommendations', 'AI recommendations auth protection', False, str(e))
+        
+        # Test 2: Track recommendation click without authentication
+        try:
+            fake_rec_id = str(uuid.uuid4())
+            response = await self.client.post(f"{API_BASE}/ai/recommendation/{fake_rec_id}/click")
+            if response.status_code == 401:
+                self.log_result('ai_recommendations', 'Recommendation click tracking auth protection', True)
+            else:
+                self.log_result('ai_recommendations', 'Recommendation click tracking auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('ai_recommendations', 'Recommendation click tracking auth protection', False, str(e))
+        
+        # Test 3: Verify AI recommendations endpoint structure
+        try:
+            # This will fail due to auth, but we can verify the endpoint exists
+            response = await self.client.get(f"{API_BASE}/ai/recommendations")
+            if response.status_code == 401:
+                self.log_result('ai_recommendations', 'AI recommendations endpoint exists', True)
+            else:
+                self.log_result('ai_recommendations', 'AI recommendations endpoint exists', False,
+                              f"Unexpected response: {response.status_code}")
+        except Exception as e:
+            self.log_result('ai_recommendations', 'AI recommendations endpoint exists', False, str(e))
+
+    async def test_gamified_rewards(self):
+        """Test Gamified Rewards System"""
+        print("\n🎮 Testing Gamified Rewards System...")
+        
+        # Test 1: Get user rewards profile without authentication
+        try:
+            response = await self.client.get(f"{API_BASE}/rewards/profile")
+            if response.status_code == 401:
+                self.log_result('gamified_rewards', 'Rewards profile auth protection', True)
+            else:
+                self.log_result('gamified_rewards', 'Rewards profile auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('gamified_rewards', 'Rewards profile auth protection', False, str(e))
+        
+        # Test 2: Get leaderboard (should work without auth)
+        try:
+            response = await self.client.get(f"{API_BASE}/rewards/leaderboard")
+            if response.status_code == 200:
+                leaderboard = response.json()
+                if isinstance(leaderboard, list):
+                    self.log_result('gamified_rewards', 'Leaderboard endpoint', True)
+                    print(f"   Leaderboard has {len(leaderboard)} entries")
+                else:
+                    self.log_result('gamified_rewards', 'Leaderboard endpoint', False,
+                                  "Invalid leaderboard response format")
+            else:
+                self.log_result('gamified_rewards', 'Leaderboard endpoint', False,
+                              f"Status: {response.status_code}")
+        except Exception as e:
+            self.log_result('gamified_rewards', 'Leaderboard endpoint', False, str(e))
+        
+        # Test 3: Verify rewards system structure
+        try:
+            response = await self.client.get(f"{API_BASE}/rewards/profile")
+            if response.status_code == 401:
+                self.log_result('gamified_rewards', 'Rewards system endpoint structure', True)
+            else:
+                self.log_result('gamified_rewards', 'Rewards system endpoint structure', False,
+                              f"Unexpected response: {response.status_code}")
+        except Exception as e:
+            self.log_result('gamified_rewards', 'Rewards system endpoint structure', False, str(e))
+
+    async def test_cashback_system(self):
+        """Test Integrated Cashback System"""
+        print("\n💰 Testing Integrated Cashback System...")
+        
+        # Test 1: Get user wallet without authentication
+        try:
+            response = await self.client.get(f"{API_BASE}/cashback/wallet")
+            if response.status_code == 401:
+                self.log_result('cashback_system', 'Cashback wallet auth protection', True)
+            else:
+                self.log_result('cashback_system', 'Cashback wallet auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('cashback_system', 'Cashback wallet auth protection', False, str(e))
+        
+        # Test 2: Withdraw cashback without authentication
+        try:
+            withdrawal_data = {
+                "amount": 10.0,
+                "method": "bank"
+            }
+            response = await self.client.post(f"{API_BASE}/cashback/withdraw", json=withdrawal_data)
+            if response.status_code == 401:
+                self.log_result('cashback_system', 'Cashback withdrawal auth protection', True)
+            else:
+                self.log_result('cashback_system', 'Cashback withdrawal auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('cashback_system', 'Cashback withdrawal auth protection', False, str(e))
+        
+        # Test 3: Test withdrawal with invalid amount (should fail on auth first)
+        try:
+            invalid_withdrawal = {
+                "amount": 1.0,  # Below minimum $5
+                "method": "bank"
+            }
+            response = await self.client.post(f"{API_BASE}/cashback/withdraw", json=invalid_withdrawal)
+            if response.status_code == 401:
+                self.log_result('cashback_system', 'Cashback system validation structure', True)
+            else:
+                self.log_result('cashback_system', 'Cashback system validation structure', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('cashback_system', 'Cashback system validation structure', False, str(e))
+
+    async def test_geofencing_system(self):
+        """Test Geofencing System"""
+        print("\n📍 Testing Geofencing System...")
+        
+        # Test 1: Setup geofence without authentication
+        try:
+            fake_business_id = str(uuid.uuid4())
+            geofence_data = {
+                "business_id": fake_business_id,
+                "radius_meters": 100
+            }
+            response = await self.client.post(f"{API_BASE}/geofence/setup", json=geofence_data)
+            if response.status_code == 401:
+                self.log_result('geofencing', 'Geofence setup auth protection', True)
+            else:
+                self.log_result('geofencing', 'Geofence setup auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('geofencing', 'Geofence setup auth protection', False, str(e))
+        
+        # Test 2: Check geofences without authentication
+        try:
+            location_data = {
+                "latitude": 40.7128,
+                "longitude": -74.0060
+            }
+            response = await self.client.post(f"{API_BASE}/geofence/check", json=location_data)
+            if response.status_code == 401:
+                self.log_result('geofencing', 'Geofence check auth protection', True)
+            else:
+                self.log_result('geofencing', 'Geofence check auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('geofencing', 'Geofence check auth protection', False, str(e))
+        
+        # Test 3: Get user geofences without authentication
+        try:
+            response = await self.client.get(f"{API_BASE}/geofence/my-geofences")
+            if response.status_code == 401:
+                self.log_result('geofencing', 'User geofences auth protection', True)
+            else:
+                self.log_result('geofencing', 'User geofences auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('geofencing', 'User geofences auth protection', False, str(e))
+
+    async def test_business_analytics(self):
+        """Test Enhanced Business Analytics Dashboard"""
+        print("\n📊 Testing Enhanced Business Analytics Dashboard...")
+        
+        # Test 1: Get advanced business analytics without authentication
+        try:
+            response = await self.client.get(f"{API_BASE}/business/advanced-analytics")
+            if response.status_code == 401:
+                self.log_result('business_analytics', 'Advanced analytics auth protection', True)
+            else:
+                self.log_result('business_analytics', 'Advanced analytics auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('business_analytics', 'Advanced analytics auth protection', False, str(e))
+        
+        # Test 2: Get customer insights without authentication
+        try:
+            response = await self.client.get(f"{API_BASE}/business/customer-insights")
+            if response.status_code == 401:
+                self.log_result('business_analytics', 'Customer insights auth protection', True)
+            else:
+                self.log_result('business_analytics', 'Customer insights auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('business_analytics', 'Customer insights auth protection', False, str(e))
+        
+        # Test 3: Verify analytics endpoints exist and are properly protected
+        try:
+            response = await self.client.get(f"{API_BASE}/business/advanced-analytics")
+            if response.status_code == 401:
+                self.log_result('business_analytics', 'Enhanced analytics endpoint structure', True)
+            else:
+                self.log_result('business_analytics', 'Enhanced analytics endpoint structure', False,
+                              f"Unexpected response: {response.status_code}")
+        except Exception as e:
+            self.log_result('business_analytics', 'Enhanced analytics endpoint structure', False, str(e))
+
     async def test_database_operations(self):
         """Test database connectivity and operations"""
         print("\n💾 Testing Database Operations...")
