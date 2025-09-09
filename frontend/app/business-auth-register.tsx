@@ -609,22 +609,24 @@ export default function BusinessAuthRegisterPage() {
         </SafeAreaView>
       </Modal>
 
-      {/* Map Location Picker */}
-      <MapLocationPicker
-        visible={showMapPicker}
-        onClose={() => setShowMapPicker(false)}
-        onLocationSelected={handleMapLocationSelect}
-        initialLocation={
-          formData.precise_latitude && formData.precise_longitude
-            ? {
-                latitude: formData.precise_latitude,
-                longitude: formData.precise_longitude,
-                address: `${formData.city}, ${formData.state}`
-              }
-            : undefined
-        }
-        title="Select Your Business Location"
-      />
+      {/* Map Location Picker - Only render on native platforms */}
+      {Platform.OS !== 'web' && MapLocationPicker && (
+        <MapLocationPicker
+          visible={showMapPicker}
+          onClose={() => setShowMapPicker(false)}
+          onLocationSelected={handleMapLocationSelect}
+          initialLocation={
+            formData.precise_latitude && formData.precise_longitude
+              ? {
+                  latitude: formData.precise_latitude,
+                  longitude: formData.precise_longitude,
+                  address: `${formData.city}, ${formData.state}`
+                }
+              : undefined
+          }
+          title="Select Your Business Location"
+        />
+      )}
     </SafeAreaView>
   );
 }
