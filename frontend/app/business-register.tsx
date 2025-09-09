@@ -63,6 +63,8 @@ export default function BusinessRegisterPage() {
     phone: '',
     address: '',
     city: '',
+    postalCode: '',
+    state: '',
     country: 'US',
     language: 'en',
   });
