@@ -30,6 +30,11 @@ class BackendTester:
             'discount_system': {'passed': 0, 'failed': 0, 'errors': []},
             'rating_system': {'passed': 0, 'failed': 0, 'errors': []},
             'admin_system': {'passed': 0, 'failed': 0, 'errors': []},
+            'ai_recommendations': {'passed': 0, 'failed': 0, 'errors': []},
+            'gamified_rewards': {'passed': 0, 'failed': 0, 'errors': []},
+            'cashback_system': {'passed': 0, 'failed': 0, 'errors': []},
+            'geofencing': {'passed': 0, 'failed': 0, 'errors': []},
+            'business_analytics': {'passed': 0, 'failed': 0, 'errors': []},
         }
         self.session_token = None
         self.test_user_id = None
