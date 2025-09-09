@@ -49,6 +49,11 @@ interface LocationCoordinates {
   latitude: number;
   longitude: number;
   address?: string;
+  city?: string;
+  postalCode?: string;
+  state?: string;
+  country?: string;
+  formattedAddress?: string;
 }
 
 export default function BusinessRegisterPage() {
