@@ -1653,6 +1653,13 @@ async def main():
         await tester.test_phase3_data_protection_gdpr()
         await tester.test_phase4_mobile_security_system()
         
+        # Run SMART PUSH NOTIFICATIONS & BUSINESS MOBILE DASHBOARD tests
+        print("\n" + "="*60)
+        print("📱 TESTING SMART PUSH NOTIFICATIONS & BUSINESS MOBILE DASHBOARD")
+        print("="*60)
+        
+        await tester.test_smart_push_notifications_system()
+        
         # Print summary
         success = tester.print_summary()
         
