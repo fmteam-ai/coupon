@@ -196,27 +196,50 @@ export default function MapLocationPicker({
 
         {/* Map */}
         <View style={styles.mapContainer}>
-          <MapView
-            style={styles.map}
-            region={region}
-            onRegionChangeComplete={setRegion}
-            onPress={handleMapPress}
-            showsUserLocation={locationPermission}
-            showsMyLocationButton={false}
-            toolbarEnabled={false}
-          >
-            {selectedLocation && (
-              <Marker
-                coordinate={{
-                  latitude: selectedLocation.latitude,
-                  longitude: selectedLocation.longitude,
-                }}
-                title="Business Location"
-                description={selectedLocation.address || "Selected location"}
-                pinColor="#007AFF"
-              />
-            )}
-          </MapView>
+          {Platform.OS !== 'web' && MapView ? (
+            <MapView
+              style={styles.map}
+              region={region}
+              onRegionChangeComplete={setRegion}
+              onPress={handleMapPress}
+              showsUserLocation={locationPermission}
+              showsMyLocationButton={false}
+              toolbarEnabled={false}
+            >
+              {selectedLocation && (
+                <Marker
+                  coordinate={{
+                    latitude: selectedLocation.latitude,
+                    longitude: selectedLocation.longitude,
+                  }}
+                  title="Business Location"
+                  description={selectedLocation.address || "Selected location"}
+                  pinColor="#007AFF"
+                />
+              )}
+            </MapView>
+          ) : (
+            // Web fallback: Show a placeholder with location coordinates
+            <View style={styles.webMapPlaceholder}>
+              <Ionicons name="map" size={64} color="#ccc" />
+              <Text style={styles.webMapText}>Map View</Text>
+              <Text style={styles.webMapSubtext}>
+                Interactive map is available on mobile devices
+              </Text>
+              {selectedLocation && (
+                <View style={styles.webLocationInfo}>
+                  <Text style={styles.webLocationText}>
+                    📍 Selected Location: {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}
+                  </Text>
+                  {selectedLocation.address && (
+                    <Text style={styles.webLocationAddress}>
+                      {selectedLocation.address}
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Map Controls */}
           <View style={styles.mapControls}>
