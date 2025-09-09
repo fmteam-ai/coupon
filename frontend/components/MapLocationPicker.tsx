@@ -105,6 +105,16 @@ export default function MapLocationPicker({
   };
 
   const handleMapPress = async (event: any) => {
+    if (Platform.OS === 'web') {
+      // On web, we'll use current location or allow manual coordinate entry
+      Alert.alert(
+        'Set Location',
+        'Map interaction is available on mobile devices. Use "Get Current Location" to set your position.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     const { latitude, longitude } = event.nativeEvent.coordinate;
     
     try {
