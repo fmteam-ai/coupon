@@ -674,7 +674,7 @@ export default function HomePage() {
           </View>
           
           <Text style={styles.footerCopyright}>
-            © 2025 CouponApp. All rights reserved.
+            © 2025 DealWiz. All rights reserved.
           </Text>
         </View>
       </ScrollView>
