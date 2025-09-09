@@ -3390,6 +3390,84 @@ async def create_business_with_90_day_trial(business: Business, user_email: str)
         "message": eligibility["reason"]
     }
 
+# ============================================================================
+# VOICE AI ASSISTANT INTEGRATION
+# ============================================================================
+
+from voice_ai import voice_assistant
+
+@api_router.post("/api/voice/process")
+async def process_voice_command(request: Request):
+    """Process voice command with AI assistant"""
+    data = await request.json()
+    
+    # Get user from session
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    voice_text = data.get("voice_text", "")
+    location = data.get("location")  # {latitude: float, longitude: float}
+    
+    if not voice_text:
+        raise HTTPException(status_code=400, detail="Voice text is required")
+    
+    try:
+        result = await voice_assistant.process_voice_command(
+            user_id=user["id"],
+            voice_text=voice_text,
+            location=location
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Voice processing error: {str(e)}")
+
+@api_router.get("/api/voice/suggestions")
+async def get_voice_suggestions(request: Request):
+    """Get personalized voice command suggestions"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        suggestions = await voice_assistant.get_personalized_suggestions(user["id"])
+        return suggestions
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting suggestions: {str(e)}")
+
+@api_router.post("/api/voice/feedback")
+async def voice_feedback(request: Request):
+    """Store user feedback on voice interactions"""
+    data = await request.json()
+    
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    interaction_id = data.get("interaction_id")
+    rating = data.get("rating")  # 1-5 stars
+    feedback = data.get("feedback", "")
+    
+    try:
+        # Store feedback in database
+        feedback_doc = {
+            "user_id": user["id"],
+            "interaction_id": interaction_id,
+            "rating": rating,
+            "feedback": feedback,
+            "timestamp": datetime.now()
+        }
+        
+        db.voice_feedback.insert_one(feedback_doc)
+        
+        return {"success": True, "message": "Feedback stored successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error storing feedback: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
