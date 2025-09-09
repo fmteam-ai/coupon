@@ -440,6 +440,50 @@ export default function HomePage() {
           </ScrollView>
         </View>
 
+        {/* Voice Search Results */}
+        {voiceDeals.length > 0 && (
+          <View style={styles.voiceResultsContainer}>
+            <View style={styles.voiceResultsHeader}>
+              <Ionicons name="mic" size={20} color="#007AFF" />
+              <Text style={styles.voiceResultsTitle}>Voice Search Results</Text>
+              <TouchableOpacity onPress={() => setVoiceDeals([])}>
+                <Ionicons name="close" size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.voiceResultsScroll}
+            >
+              {voiceDeals.map((item, index) => (
+                <TouchableOpacity
+                  key={`voice-${item.id}-${index}`}
+                  style={styles.voiceResultCard}
+                  onPress={() => router.push(`/business/${item.business?.id || 'unknown'}`)}
+                >
+                  <View style={styles.voiceResultHeader}>
+                    <Text style={styles.voiceResultTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.voiceResultValue}>
+                      {item.discount_type === 'percentage' 
+                        ? `${item.discount_value}% OFF`
+                        : `$${item.discount_value} OFF`
+                      }
+                    </Text>
+                  </View>
+                  <Text style={styles.voiceResultBusiness} numberOfLines={1}>
+                    {item.business?.name}
+                  </Text>
+                  <Text style={styles.voiceResultDescription} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Businesses */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
