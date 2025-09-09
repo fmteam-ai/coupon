@@ -757,6 +757,490 @@ class BackendTester:
         except Exception as e:
             self.log_result('dynamic_pricing', 'Market analysis across multiple categories', False, str(e))
 
+    async def test_phase1_api_security_system(self):
+        """Test Phase 1: API Security System"""
+        print("\n🔒 Testing Phase 1: API Security System...")
+        
+        # Test 1: Security status endpoint
+        try:
+            response = await self.client.get(f"{API_BASE}/security/status")
+            if response.status_code == 200:
+                status_data = response.json()
+                if ('rate_limiter' in status_data and 'security_validator' in status_data):
+                    self.log_result('phase1_api_security', 'Security status with rate limiter and validator', True)
+                    print("   ✓ Security status includes rate_limiter and security_validator components")
+                else:
+                    self.log_result('phase1_api_security', 'Security status with rate limiter and validator', False,
+                                  f"Missing security components in response: {status_data}")
+            else:
+                self.log_result('phase1_api_security', 'Security status with rate limiter and validator', False,
+                              f"Status: {response.status_code}")
+        except Exception as e:
+            self.log_result('phase1_api_security', 'Security status with rate limiter and validator', False, str(e))
+        
+        # Test 2: Security headers endpoint
+        try:
+            response = await self.client.get(f"{API_BASE}/security/headers")
+            if response.status_code == 200:
+                headers_data = response.json()
+                if 'security_headers' in headers_data:
+                    self.log_result('phase1_api_security', 'Security headers configuration', True)
+                    print("   ✓ Security headers endpoint operational")
+                else:
+                    self.log_result('phase1_api_security', 'Security headers configuration', False,
+                                  f"Invalid headers response: {headers_data}")
+            else:
+                self.log_result('phase1_api_security', 'Security headers configuration', False,
+                              f"Status: {response.status_code}")
+        except Exception as e:
+            self.log_result('phase1_api_security', 'Security headers configuration', False, str(e))
+        
+        # Test 3: Input validation endpoint
+        try:
+            validation_data = {
+                "input_data": "test input",
+                "validation_type": "text"
+            }
+            response = await self.client.post(f"{API_BASE}/security/validate-input", json=validation_data)
+            if response.status_code == 200:
+                validation_result = response.json()
+                if 'validation_results' in validation_result:
+                    self.log_result('phase1_api_security', 'Input validation with results structure', True)
+                    print("   ✓ Input validation includes validation_results in response")
+                else:
+                    self.log_result('phase1_api_security', 'Input validation with results structure', False,
+                                  f"Missing validation_results in response: {validation_result}")
+            else:
+                self.log_result('phase1_api_security', 'Input validation with results structure', False,
+                              f"Status: {response.status_code}")
+        except Exception as e:
+            self.log_result('phase1_api_security', 'Input validation with results structure', False, str(e))
+        
+        # Test 4: Rate limit status endpoint
+        try:
+            response = await self.client.get(f"{API_BASE}/security/rate-limit-status")
+            if response.status_code == 200:
+                rate_limit_data = response.json()
+                if 'rate_limits' in rate_limit_data:
+                    self.log_result('phase1_api_security', 'Rate limit status monitoring', True)
+                    print("   ✓ Rate limit status monitoring operational")
+                else:
+                    self.log_result('phase1_api_security', 'Rate limit status monitoring', False,
+                                  f"Invalid rate limit response: {rate_limit_data}")
+            else:
+                self.log_result('phase1_api_security', 'Rate limit status monitoring', False,
+                              f"Status: {response.status_code}")
+        except Exception as e:
+            self.log_result('phase1_api_security', 'Rate limit status monitoring', False, str(e))
+        
+        # Test 5: Security test protection endpoint
+        try:
+            test_data = {
+                "test_type": "sql_injection",
+                "payload": "'; DROP TABLE users; --"
+            }
+            response = await self.client.post(f"{API_BASE}/security/test-protection", json=test_data)
+            if response.status_code == 200:
+                protection_result = response.json()
+                if 'security_checks' in protection_result:
+                    self.log_result('phase1_api_security', 'Security protection with checks structure', True)
+                    print("   ✓ Security test protection includes security_checks in response")
+                else:
+                    self.log_result('phase1_api_security', 'Security protection with checks structure', False,
+                                  f"Missing security_checks in response: {protection_result}")
+            else:
+                self.log_result('phase1_api_security', 'Security protection with checks structure', False,
+                              f"Status: {response.status_code}")
+        except Exception as e:
+            self.log_result('phase1_api_security', 'Security protection with checks structure', False, str(e))
+
+    async def test_phase2_enhanced_auth_system(self):
+        """Test Phase 2: Enhanced Authentication & Authorization"""
+        print("\n🔐 Testing Phase 2: Enhanced Authentication & Authorization...")
+        
+        # Test 1: JWT token refresh without authentication
+        try:
+            refresh_data = {"refresh_token": "fake_refresh_token"}
+            response = await self.client.post(f"{API_BASE}/auth/token/refresh", json=refresh_data)
+            if response.status_code in [401, 422]:  # 401 for auth, 422 for validation
+                self.log_result('phase2_enhanced_auth', 'JWT token refresh endpoint structure', True)
+                print("   ✓ JWT token refresh endpoint properly structured")
+            else:
+                self.log_result('phase2_enhanced_auth', 'JWT token refresh endpoint structure', False,
+                              f"Expected 401 or 422, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase2_enhanced_auth', 'JWT token refresh endpoint structure', False, str(e))
+        
+        # Test 2: Enhanced logout with token blacklisting
+        try:
+            response = await self.client.post(f"{API_BASE}/auth/logout")
+            if response.status_code == 401:
+                self.log_result('phase2_enhanced_auth', 'Enhanced logout with token blacklisting', True)
+                print("   ✓ Enhanced logout endpoint operational")
+            else:
+                self.log_result('phase2_enhanced_auth', 'Enhanced logout with token blacklisting', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase2_enhanced_auth', 'Enhanced logout with token blacklisting', False, str(e))
+        
+        # Test 3: MFA setup without authentication
+        try:
+            response = await self.client.post(f"{API_BASE}/auth/mfa/setup")
+            if response.status_code == 401:
+                self.log_result('phase2_enhanced_auth', 'MFA setup endpoint protection', True)
+                print("   ✓ MFA setup properly protected by authentication")
+            else:
+                self.log_result('phase2_enhanced_auth', 'MFA setup endpoint protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase2_enhanced_auth', 'MFA setup endpoint protection', False, str(e))
+        
+        # Test 4: MFA verification without authentication
+        try:
+            mfa_data = {"totp_code": "123456"}
+            response = await self.client.post(f"{API_BASE}/auth/mfa/verify-setup", json=mfa_data)
+            if response.status_code == 401:
+                self.log_result('phase2_enhanced_auth', 'MFA verification endpoint protection', True)
+                print("   ✓ MFA verification properly protected by authentication")
+            else:
+                self.log_result('phase2_enhanced_auth', 'MFA verification endpoint protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase2_enhanced_auth', 'MFA verification endpoint protection', False, str(e))
+        
+        # Test 5: MFA disable without authentication
+        try:
+            response = await self.client.post(f"{API_BASE}/auth/mfa/disable")
+            if response.status_code == 401:
+                self.log_result('phase2_enhanced_auth', 'MFA disable endpoint protection', True)
+                print("   ✓ MFA disable properly protected by authentication")
+            else:
+                self.log_result('phase2_enhanced_auth', 'MFA disable endpoint protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase2_enhanced_auth', 'MFA disable endpoint protection', False, str(e))
+        
+        # Test 6: Session management without authentication
+        try:
+            response = await self.client.get(f"{API_BASE}/auth/sessions")
+            if response.status_code == 401:
+                self.log_result('phase2_enhanced_auth', 'Session management endpoint protection', True)
+                print("   ✓ Session management properly protected by authentication")
+            else:
+                self.log_result('phase2_enhanced_auth', 'Session management endpoint protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase2_enhanced_auth', 'Session management endpoint protection', False, str(e))
+        
+        # Test 7: Password reset request
+        try:
+            reset_data = {"email": "test@example.com"}
+            response = await self.client.post(f"{API_BASE}/auth/password-reset/request", json=reset_data)
+            if response.status_code in [200, 422]:  # 200 for success, 422 for validation
+                self.log_result('phase2_enhanced_auth', 'Password reset request endpoint', True)
+                print("   ✓ Password reset request endpoint operational")
+            else:
+                self.log_result('phase2_enhanced_auth', 'Password reset request endpoint', False,
+                              f"Expected 200 or 422, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase2_enhanced_auth', 'Password reset request endpoint', False, str(e))
+        
+        # Test 8: RBAC permissions endpoint without authentication
+        try:
+            response = await self.client.get(f"{API_BASE}/auth/permissions")
+            if response.status_code == 401:
+                self.log_result('phase2_enhanced_auth', 'RBAC permissions endpoint protection', True)
+                print("   ✓ RBAC permissions properly protected by authentication")
+            else:
+                self.log_result('phase2_enhanced_auth', 'RBAC permissions endpoint protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase2_enhanced_auth', 'RBAC permissions endpoint protection', False, str(e))
+        
+        # Test 9: Role assignment without authentication
+        try:
+            role_data = {"user_id": str(uuid.uuid4()), "role": "business_owner"}
+            response = await self.client.post(f"{API_BASE}/auth/role/assign", json=role_data)
+            if response.status_code == 401:
+                self.log_result('phase2_enhanced_auth', 'Role assignment endpoint protection', True)
+                print("   ✓ Role assignment properly protected by authentication")
+            else:
+                self.log_result('phase2_enhanced_auth', 'Role assignment endpoint protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase2_enhanced_auth', 'Role assignment endpoint protection', False, str(e))
+        
+        # Test 10: Get roles endpoint
+        try:
+            response = await self.client.get(f"{API_BASE}/auth/roles")
+            if response.status_code in [200, 401]:  # May or may not require auth
+                self.log_result('phase2_enhanced_auth', 'Roles endpoint availability', True)
+                print("   ✓ Roles endpoint available")
+            else:
+                self.log_result('phase2_enhanced_auth', 'Roles endpoint availability', False,
+                              f"Unexpected status: {response.status_code}")
+        except Exception as e:
+            self.log_result('phase2_enhanced_auth', 'Roles endpoint availability', False, str(e))
+
+    async def test_phase3_data_protection_gdpr(self):
+        """Test Phase 3: Data Protection & GDPR Compliance - PRIORITY TESTING"""
+        print("\n🛡️ Testing Phase 3: Data Protection & GDPR Compliance (PRIORITY)...")
+        
+        # Test 1: GDPR retention policies (public endpoint)
+        try:
+            response = await self.client.get(f"{API_BASE}/gdpr/retention-policies")
+            if response.status_code == 200:
+                policies = response.json()
+                if 'retention_policies' in policies:
+                    self.log_result('phase3_data_protection', 'GDPR retention policies endpoint', True)
+                    print("   ✓ GDPR retention policies endpoint operational")
+                else:
+                    self.log_result('phase3_data_protection', 'GDPR retention policies endpoint', False,
+                                  f"Invalid response structure: {policies}")
+            else:
+                self.log_result('phase3_data_protection', 'GDPR retention policies endpoint', False,
+                              f"Status: {response.status_code}")
+        except Exception as e:
+            self.log_result('phase3_data_protection', 'GDPR retention policies endpoint', False, str(e))
+        
+        # Test 2: GDPR consent GET without authentication
+        try:
+            response = await self.client.get(f"{API_BASE}/gdpr/consent")
+            if response.status_code == 401:
+                self.log_result('phase3_data_protection', 'GDPR consent GET auth protection', True)
+                print("   ✓ GDPR consent GET properly protected by authentication")
+            else:
+                self.log_result('phase3_data_protection', 'GDPR consent GET auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase3_data_protection', 'GDPR consent GET auth protection', False, str(e))
+        
+        # Test 3: GDPR consent POST without authentication
+        try:
+            consent_data = {
+                "consent_type": "marketing",
+                "granted": True
+            }
+            response = await self.client.post(f"{API_BASE}/gdpr/consent", json=consent_data)
+            if response.status_code == 401:
+                self.log_result('phase3_data_protection', 'GDPR consent POST auth protection', True)
+                print("   ✓ GDPR consent POST properly protected by authentication")
+            else:
+                self.log_result('phase3_data_protection', 'GDPR consent POST auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase3_data_protection', 'GDPR consent POST auth protection', False, str(e))
+        
+        # Test 4: GDPR data export without authentication
+        try:
+            export_data = {"data_types": ["profile", "transactions"]}
+            response = await self.client.post(f"{API_BASE}/gdpr/export", json=export_data)
+            if response.status_code == 401:
+                self.log_result('phase3_data_protection', 'GDPR data export auth protection', True)
+                print("   ✓ GDPR data export properly protected by authentication")
+            else:
+                self.log_result('phase3_data_protection', 'GDPR data export auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase3_data_protection', 'GDPR data export auth protection', False, str(e))
+        
+        # Test 5: GDPR data deletion without authentication (admin only)
+        try:
+            delete_data = {"user_id": str(uuid.uuid4()), "deletion_type": "full"}
+            response = await self.client.post(f"{API_BASE}/gdpr/delete", json=delete_data)
+            if response.status_code == 401:
+                self.log_result('phase3_data_protection', 'GDPR data deletion admin protection', True)
+                print("   ✓ GDPR data deletion properly protected (admin only)")
+            else:
+                self.log_result('phase3_data_protection', 'GDPR data deletion admin protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase3_data_protection', 'GDPR data deletion admin protection', False, str(e))
+        
+        # Test 6: GDPR request submission without authentication
+        try:
+            request_data = {
+                "request_type": "data_export",
+                "description": "Request my personal data"
+            }
+            response = await self.client.post(f"{API_BASE}/gdpr/request", json=request_data)
+            if response.status_code == 401:
+                self.log_result('phase3_data_protection', 'GDPR request submission auth protection', True)
+                print("   ✓ GDPR request submission properly protected by authentication")
+            else:
+                self.log_result('phase3_data_protection', 'GDPR request submission auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase3_data_protection', 'GDPR request submission auth protection', False, str(e))
+        
+        # Test 7: GDPR requests list without authentication
+        try:
+            response = await self.client.get(f"{API_BASE}/gdpr/requests")
+            if response.status_code == 401:
+                self.log_result('phase3_data_protection', 'GDPR requests list auth protection', True)
+                print("   ✓ GDPR requests list properly protected by authentication")
+            else:
+                self.log_result('phase3_data_protection', 'GDPR requests list auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase3_data_protection', 'GDPR requests list auth protection', False, str(e))
+        
+        # Test 8: GDPR audit log without authentication
+        try:
+            response = await self.client.get(f"{API_BASE}/gdpr/audit-log")
+            if response.status_code == 401:
+                self.log_result('phase3_data_protection', 'GDPR audit log auth protection', True)
+                print("   ✓ GDPR audit log properly protected by authentication")
+            else:
+                self.log_result('phase3_data_protection', 'GDPR audit log auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase3_data_protection', 'GDPR audit log auth protection', False, str(e))
+
+    async def test_phase4_mobile_security_system(self):
+        """Test Phase 4: Mobile Security System"""
+        print("\n📱 Testing Phase 4: Mobile Security System...")
+        
+        # Test 1: Device registration without authentication
+        try:
+            device_data = {
+                "device_id": str(uuid.uuid4()),
+                "device_info": {
+                    "platform": "iOS",
+                    "version": "15.0",
+                    "model": "iPhone 13"
+                }
+            }
+            response = await self.client.post(f"{API_BASE}/mobile/device/register", json=device_data)
+            if response.status_code == 401:
+                self.log_result('phase4_mobile_security', 'Device registration auth protection', True)
+                print("   ✓ Device registration properly protected by authentication")
+            else:
+                self.log_result('phase4_mobile_security', 'Device registration auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase4_mobile_security', 'Device registration auth protection', False, str(e))
+        
+        # Test 2: Device security status without authentication
+        try:
+            fake_device_id = str(uuid.uuid4())
+            response = await self.client.get(f"{API_BASE}/mobile/device/status/{fake_device_id}")
+            if response.status_code == 401:
+                self.log_result('phase4_mobile_security', 'Device security status auth protection', True)
+                print("   ✓ Device security status properly protected by authentication")
+            else:
+                self.log_result('phase4_mobile_security', 'Device security status auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase4_mobile_security', 'Device security status auth protection', False, str(e))
+        
+        # Test 3: Security policies endpoint (may be public)
+        try:
+            response = await self.client.get(f"{API_BASE}/mobile/security/policies")
+            if response.status_code in [200, 401]:
+                self.log_result('phase4_mobile_security', 'Security policies endpoint availability', True)
+                print("   ✓ Security policies endpoint available")
+            else:
+                self.log_result('phase4_mobile_security', 'Security policies endpoint availability', False,
+                              f"Unexpected status: {response.status_code}")
+        except Exception as e:
+            self.log_result('phase4_mobile_security', 'Security policies endpoint availability', False, str(e))
+        
+        # Test 4: Certificate pinning configuration
+        try:
+            response = await self.client.get(f"{API_BASE}/mobile/certificate/pins")
+            if response.status_code in [200, 401]:
+                self.log_result('phase4_mobile_security', 'Certificate pinning configuration', True)
+                print("   ✓ Certificate pinning configuration available")
+            else:
+                self.log_result('phase4_mobile_security', 'Certificate pinning configuration', False,
+                              f"Unexpected status: {response.status_code}")
+        except Exception as e:
+            self.log_result('phase4_mobile_security', 'Certificate pinning configuration', False, str(e))
+        
+        # Test 5: Certificate validation
+        try:
+            cert_data = {"certificate": "fake_certificate_data"}
+            response = await self.client.post(f"{API_BASE}/mobile/certificate/validate", json=cert_data)
+            if response.status_code in [200, 401, 422]:  # 422 for validation error
+                self.log_result('phase4_mobile_security', 'Certificate validation system', True)
+                print("   ✓ Certificate validation system operational")
+            else:
+                self.log_result('phase4_mobile_security', 'Certificate validation system', False,
+                              f"Unexpected status: {response.status_code}")
+        except Exception as e:
+            self.log_result('phase4_mobile_security', 'Certificate validation system', False, str(e))
+        
+        # Test 6: Security violation reporting without authentication
+        try:
+            violation_data = {
+                "violation_type": "jailbreak_detected",
+                "device_id": str(uuid.uuid4())
+            }
+            response = await self.client.post(f"{API_BASE}/mobile/security/violation", json=violation_data)
+            if response.status_code == 401:
+                self.log_result('phase4_mobile_security', 'Security violation reporting auth protection', True)
+                print("   ✓ Security violation reporting properly protected by authentication")
+            else:
+                self.log_result('phase4_mobile_security', 'Security violation reporting auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase4_mobile_security', 'Security violation reporting auth protection', False, str(e))
+        
+        # Test 7: Device trust management without authentication (admin only)
+        try:
+            trust_data = {
+                "device_id": str(uuid.uuid4()),
+                "trust_level": "trusted"
+            }
+            response = await self.client.post(f"{API_BASE}/mobile/device/trust", json=trust_data)
+            if response.status_code == 401:
+                self.log_result('phase4_mobile_security', 'Device trust management admin protection', True)
+                print("   ✓ Device trust management properly protected (admin only)")
+            else:
+                self.log_result('phase4_mobile_security', 'Device trust management admin protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase4_mobile_security', 'Device trust management admin protection', False, str(e))
+        
+        # Test 8: Security threats monitoring
+        try:
+            response = await self.client.get(f"{API_BASE}/mobile/security/threats")
+            if response.status_code in [200, 401]:
+                self.log_result('phase4_mobile_security', 'Security threats monitoring dashboard', True)
+                print("   ✓ Security threats monitoring dashboard available")
+            else:
+                self.log_result('phase4_mobile_security', 'Security threats monitoring dashboard', False,
+                              f"Unexpected status: {response.status_code}")
+        except Exception as e:
+            self.log_result('phase4_mobile_security', 'Security threats monitoring dashboard', False, str(e))
+        
+        # Test 9: Security attestation without authentication
+        try:
+            fake_device_id = str(uuid.uuid4())
+            response = await self.client.get(f"{API_BASE}/mobile/security/attestation/{fake_device_id}")
+            if response.status_code == 401:
+                self.log_result('phase4_mobile_security', 'Security attestation auth protection', True)
+                print("   ✓ Security attestation properly protected by authentication")
+            else:
+                self.log_result('phase4_mobile_security', 'Security attestation auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase4_mobile_security', 'Security attestation auth protection', False, str(e))
+        
+        # Test 10: Security challenge system without authentication
+        try:
+            challenge_data = {"device_id": str(uuid.uuid4())}
+            response = await self.client.post(f"{API_BASE}/mobile/security/challenge", json=challenge_data)
+            if response.status_code == 401:
+                self.log_result('phase4_mobile_security', 'Security challenge system auth protection', True)
+                print("   ✓ Security challenge system properly protected by authentication")
+            else:
+                self.log_result('phase4_mobile_security', 'Security challenge system auth protection', False,
+                              f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_result('phase4_mobile_security', 'Security challenge system auth protection', False, str(e))
+
     async def test_computer_vision_ar_system(self):
         """Test Computer Vision & AR Features System"""
         print("\n📷🥽 Testing Computer Vision & AR Features System...")
