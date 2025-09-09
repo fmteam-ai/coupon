@@ -15,11 +15,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Conditionally import maps only on native platforms
 let MapView: any, Marker: any, Region: any;
-if (Platform.OS !== 'web') {
-  const Maps = require('react-native-maps');
-  MapView = Maps.default;
-  Marker = Maps.Marker;
-  Region = Maps.Region;
+try {
+  if (Platform.OS !== 'web') {
+    const Maps = require('react-native-maps');
+    MapView = Maps.default;
+    Marker = Maps.Marker;
+    Region = Maps.Region;
+  }
+} catch (error) {
+  console.log('react-native-maps not available:', error);
+  MapView = null;
+  Marker = null;
+  Region = null;
 }
 
 interface LocationData {
