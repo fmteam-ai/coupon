@@ -344,10 +344,25 @@ export default function MapLocationPicker({
               <Ionicons name="location" size={20} color="#34C759" />
               <View style={styles.locationText}>
                 <Text style={styles.locationTitle}>Selected Location</Text>
-                <Text style={styles.locationAddress} numberOfLines={2}>
-                  {selectedLocation.address || 
+                <Text style={styles.locationAddress} numberOfLines={3}>
+                  {selectedLocation.formattedAddress || 
                    `${selectedLocation.latitude.toFixed(6)}, ${selectedLocation.longitude.toFixed(6)}`}
                 </Text>
+                {selectedLocation.city && selectedLocation.postalCode && (
+                  <View style={styles.addressComponents}>
+                    <Text style={styles.addressComponent}>
+                      📍 {selectedLocation.address}
+                    </Text>
+                    <Text style={styles.addressComponent}>
+                      🏙️ {selectedLocation.city}{selectedLocation.postalCode ? `, ${selectedLocation.postalCode}` : ''}
+                    </Text>
+                    {selectedLocation.state && (
+                      <Text style={styles.addressComponent}>
+                        🗺️ {selectedLocation.state}, {selectedLocation.country}
+                      </Text>
+                    )}
+                  </View>
+                )}
               </View>
             </View>
           </View>
