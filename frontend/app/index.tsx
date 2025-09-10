@@ -1098,7 +1098,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   footerSection: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2c2c2e', // Dark theme background
     paddingHorizontal: 20,
     paddingVertical: 24,
     marginTop: 16,
@@ -1106,7 +1106,7 @@ const styles = StyleSheet.create({
   footerTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#fff', // White text on dark background
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -1123,14 +1123,16 @@ const styles = StyleSheet.create({
   },
   footerLinkText: {
     fontSize: 14,
-    color: '#666',
+    color: '#fff', // White text on dark background
     marginLeft: 8,
+    opacity: 0.8,
   },
   footerCopyright: {
     fontSize: 12,
-    color: '#999',
+    color: '#fff', // White text on dark background
     textAlign: 'center',
     fontStyle: 'italic',
+    opacity: 0.6,
   },
   businessSection: {
     backgroundColor: '#fff',
