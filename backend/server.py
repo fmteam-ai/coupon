@@ -5925,6 +5925,258 @@ async def get_data_retention_policies():
         raise HTTPException(status_code=500, detail=f"Retention policies error: {str(e)}")
 
 # Include the router in the main app
+# ============================================================================
+# ADMIN PLATFORM MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@api_router.get("/admin/platform/settings")
+async def get_platform_settings(user: User = Depends(require_admin_auth)):
+    """Get platform-wide settings"""
+    try:
+        # Get platform settings from database
+        settings = await db.platform_settings.find_one({}) or {
+            "app_name": "DealWiz",
+            "app_version": "1.0.0",
+            "maintenance_mode": False,
+            "max_businesses_per_user": 5,
+            "max_discounts_per_business": 100,
+            "default_trial_days": 30,
+            "email_notifications_enabled": True,
+            "push_notifications_enabled": True,
+            "analytics_enabled": True,
+            "business_approval_required": True,
+            "minimum_rating": 1,
+            "maximum_rating": 5,
+            "currency": "USD",
+            "timezone": "UTC",
+            "contact_email": "support@dealwiz.com",
+            "terms_url": "/terms-of-use",
+            "privacy_url": "/privacy-policy",
+            "last_updated": datetime.utcnow().isoformat()
+        }
+        
+        # Convert ObjectId to string if present
+        if '_id' in settings:
+            settings['_id'] = str(settings['_id'])
+        
+        return settings
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get platform settings: {str(e)}")
+
+@api_router.put("/admin/platform/settings")
+async def update_platform_settings(settings: dict, user: User = Depends(require_admin_auth)):
+    """Update platform-wide settings"""
+    try:
+        # Add timestamp
+        settings["last_updated"] = datetime.utcnow().isoformat()
+        settings["updated_by"] = user.id
+        
+        # Update or insert platform settings
+        result = await db.platform_settings.update_one(
+            {},
+            {"$set": settings},
+            upsert=True
+        )
+        
+        return {
+            "success": True,
+            "message": "Platform settings updated successfully",
+            "modified_count": result.modified_count,
+            "upserted_id": str(result.upserted_id) if result.upserted_id else None
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update platform settings: {str(e)}")
+
+@api_router.get("/admin/analytics")
+async def get_admin_analytics(user: User = Depends(require_admin_auth)):
+    """Get comprehensive admin analytics"""
+    try:
+        # Get current timestamp for date calculations
+        now = datetime.utcnow()
+        thirty_days_ago = now - timedelta(days=30)
+        seven_days_ago = now - timedelta(days=7)
+        
+        # Total counts
+        total_users = await db.users.count_documents({})
+        total_businesses = await db.businesses.count_documents({})
+        total_discounts = await db.discounts.count_documents({})
+        active_discounts = await db.discounts.count_documents({"is_active": True})
+        
+        # Recent activity (last 30 days)
+        new_users_30d = await db.users.count_documents({"created_at": {"$gte": thirty_days_ago}})
+        new_businesses_30d = await db.businesses.count_documents({"created_at": {"$gte": thirty_days_ago}})
+        new_discounts_30d = await db.discounts.count_documents({"created_at": {"$gte": thirty_days_ago}})
+        
+        # Weekly activity (last 7 days) 
+        new_users_7d = await db.users.count_documents({"created_at": {"$gte": seven_days_ago}})
+        new_businesses_7d = await db.businesses.count_documents({"created_at": {"$gte": seven_days_ago}})
+        new_discounts_7d = await db.discounts.count_documents({"created_at": {"$gte": seven_days_ago}})
+        
+        # Business status breakdown
+        approved_businesses = await db.businesses.count_documents({"is_approved": True})
+        pending_businesses = await db.businesses.count_documents({"is_approved": False})
+        
+        # Top performing businesses
+        top_businesses = await db.discount_redemptions.aggregate([
+            {"$group": {"_id": "$business_id", "redemptions": {"$sum": 1}}},
+            {"$sort": {"redemptions": -1}},
+            {"$limit": 10}
+        ]).to_list(10)
+        
+        # Popular categories
+        category_stats = await db.businesses.aggregate([
+            {"$group": {"_id": "$category", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}}
+        ]).to_list(20)
+        
+        # Revenue estimates (simplified)
+        total_redemptions = await db.discount_redemptions.count_documents({})
+        recent_redemptions = await db.discount_redemptions.count_documents({"redeemed_at": {"$gte": thirty_days_ago}})
+        estimated_monthly_revenue = recent_redemptions * 0.50  # Estimated $0.50 per redemption
+        
+        return {
+            "overview": {
+                "total_users": total_users,
+                "total_businesses": total_businesses,
+                "total_discounts": total_discounts,
+                "active_discounts": active_discounts,
+                "approved_businesses": approved_businesses,
+                "pending_businesses": pending_businesses
+            },
+            "growth_metrics": {
+                "new_users_30d": new_users_30d,
+                "new_businesses_30d": new_businesses_30d,
+                "new_discounts_30d": new_discounts_30d,
+                "new_users_7d": new_users_7d,
+                "new_businesses_7d": new_businesses_7d,
+                "new_discounts_7d": new_discounts_7d
+            },
+            "performance": {
+                "total_redemptions": total_redemptions,
+                "recent_redemptions_30d": recent_redemptions,
+                "estimated_monthly_revenue": estimated_monthly_revenue,
+                "top_businesses": [{"business_id": b["_id"], "redemptions": b["redemptions"]} for b in top_businesses],
+                "popular_categories": [{"category": c["_id"], "count": c["count"]} for c in category_stats]
+            },
+            "generated_at": now.isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get admin analytics: {str(e)}")
+
+# ============================================================================
+# PAYMENT INTEGRATION ENDPOINTS
+# ============================================================================
+
+@api_router.post("/create-payment-intent")
+async def create_payment_intent(payment_data: dict, user: User = Depends(require_auth)):
+    """Create payment intent for subscription or business services"""
+    try:
+        amount = payment_data.get("amount")  # in cents
+        currency = payment_data.get("currency", "usd")
+        description = payment_data.get("description", "DealWiz Service Payment")
+        
+        if not amount or amount <= 0:
+            raise HTTPException(status_code=400, detail="Valid amount is required")
+        
+        # Simulate Stripe payment intent creation
+        payment_intent_id = f"pi_{uuid.uuid4().hex[:24]}"
+        client_secret = f"{payment_intent_id}_secret_{uuid.uuid4().hex[:16]}"
+        
+        # Store payment intent in database
+        payment_intent = {
+            "id": payment_intent_id,
+            "user_id": user.id,
+            "amount": amount,
+            "currency": currency,
+            "description": description,
+            "status": "requires_payment_method",
+            "client_secret": client_secret,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        
+        await db.payment_intents.insert_one(payment_intent)
+        
+        return {
+            "id": payment_intent_id,
+            "client_secret": client_secret,
+            "amount": amount,
+            "currency": currency,
+            "status": "requires_payment_method",
+            "description": description
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create payment intent: {str(e)}")
+
+# ============================================================================
+# BUSINESS APPROVAL ENDPOINT (MISSING)
+# ============================================================================
+
+@api_router.post("/admin/approve-business")
+async def approve_business(approval_data: dict, user: User = Depends(require_admin_auth)):
+    """Approve or reject business registration"""
+    try:
+        business_id = approval_data.get("business_id")
+        action = approval_data.get("action")  # "approve" or "reject"
+        reason = approval_data.get("reason", "")
+        
+        if not business_id or action not in ["approve", "reject"]:
+            raise HTTPException(status_code=400, detail="Valid business_id and action (approve/reject) are required")
+        
+        # Find the business
+        business = await db.businesses.find_one({"id": business_id})
+        if not business:
+            raise HTTPException(status_code=404, detail="Business not found")
+        
+        # Update business status
+        update_data = {
+            "is_approved": action == "approve",
+            "approval_status": action,
+            "approved_by": user.id,
+            "approved_at": datetime.utcnow(),
+            "approval_reason": reason
+        }
+        
+        await db.businesses.update_one(
+            {"id": business_id},
+            {"$set": update_data}
+        )
+        
+        # Log admin action
+        admin_log = {
+            "id": str(uuid.uuid4()),
+            "admin_id": user.id,
+            "action_type": "business_approval",
+            "target_id": business_id,
+            "action": action,
+            "reason": reason,
+            "timestamp": datetime.utcnow()
+        }
+        
+        await db.admin_logs.insert_one(admin_log)
+        
+        return {
+            "success": True,
+            "message": f"Business {action}d successfully",
+            "business_id": business_id,
+            "action": action
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to approve business: {str(e)}")
+
+# ============================================================================
+# EXISTING ADMIN ENDPOINTS CONTINUE...
+# ============================================================================
+
 app.include_router(api_router)
 
 app.add_middleware(
