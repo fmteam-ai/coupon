@@ -550,8 +550,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    // Modern gradient background
-    background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
+    // Modern gradient background (fallback solid color for now)
+    backgroundColor: '#007AFF',
     borderBottomWidth: 0,
     // Add subtle shadow
     shadowColor: '#000',
