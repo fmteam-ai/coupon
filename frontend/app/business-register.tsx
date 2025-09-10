@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: '#fff', // White text for better contrast on blue background
   },
   headerRight: {
     width: 40,
