@@ -550,9 +550,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e1e1',
+    // Modern gradient background
+    background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
+    borderBottomWidth: 0,
+    // Add subtle shadow
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
   backButton: {
     padding: 8,
