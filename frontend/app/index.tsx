@@ -645,7 +645,7 @@ export default function HomePage() {
         </View>
 
         {/* Footer Links */}
-        <View style={[styles.footerSection, { backgroundColor: '#2c2c2e' }]}>
+        <View style={[styles.footerSection, { backgroundColor: '#2c2c2e', marginBottom: 80 }]}>
           <Text style={[styles.footerTitle, { color: '#fff' }]}>Legal & Support</Text>
           <View style={styles.footerLinks}>
             <TouchableOpacity
