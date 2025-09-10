@@ -791,4 +791,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
+  // Modern dark footer section
+  footerSection: {
+    backgroundColor: '#2c2c2e', // Dark theme background
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#48484a',
+  },
+  footerContent: {
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#fff', // White text on dark background
+    textAlign: 'center',
+    lineHeight: 16,
+    opacity: 0.8,
+  },
 });
