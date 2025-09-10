@@ -2612,6 +2612,186 @@ async def get_business_verification_status(user: User = Depends(require_auth)):
         raise HTTPException(status_code=500, detail=f"Get verification status failed: {str(e)}")
 
 # ============================================================================
+# MISSING VERIFICATION ENDPOINTS
+# ============================================================================
+
+@api_router.post("/send-email-verification")
+async def send_email_verification_generic(request: dict, user: User = Depends(require_auth)):
+    """Send email verification code to user"""
+    try:
+        email = request.get("email")
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required")
+        
+        # Generate 6-digit verification code
+        verification_code = ''.join(random.choices(string.digits, k=6))
+        
+        # Store verification code in database
+        verification_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user.id,
+            "email": email,
+            "verification_code": verification_code,
+            "created_at": datetime.utcnow(),
+            "expires_at": datetime.utcnow() + timedelta(hours=1),
+            "verified": False
+        }
+        
+        await db.email_verifications.insert_one(verification_data)
+        
+        # Send verification email
+        success = await send_business_verification_email(email, verification_code, "DealWiz User")
+        
+        return {
+            "success": success,
+            "message": "Verification email sent successfully" if success else "Failed to send verification email"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email verification: {str(e)}")
+
+@api_router.post("/verify-email")
+async def verify_email_generic(request: dict, user: User = Depends(require_auth)):
+    """Verify email address with verification code"""
+    try:
+        verification_code = request.get("verification_code")
+        if not verification_code:
+            raise HTTPException(status_code=400, detail="Verification code is required")
+        
+        # Find verification record
+        verification = await db.email_verifications.find_one({
+            "user_id": user.id,
+            "verification_code": verification_code,
+            "verified": False,
+            "expires_at": {"$gt": datetime.utcnow()}
+        })
+        
+        if not verification:
+            raise HTTPException(status_code=400, detail="Invalid or expired verification code")
+        
+        # Mark as verified
+        await db.email_verifications.update_one(
+            {"_id": verification["_id"]},
+            {
+                "$set": {
+                    "verified": True,
+                    "verified_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        # Update user record
+        await db.users.update_one(
+            {"id": user.id},
+            {
+                "$set": {
+                    "email_verified": True,
+                    "email_verified_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        return {
+            "success": True,
+            "message": "Email verified successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email verification failed: {str(e)}")
+
+@api_router.post("/send-phone-verification")
+async def send_phone_verification_generic(request: dict, user: User = Depends(require_auth)):
+    """Send phone verification code to user"""
+    try:
+        phone = request.get("phone")
+        if not phone:
+            raise HTTPException(status_code=400, detail="Phone number is required")
+        
+        # Generate 6-digit verification code
+        verification_code = ''.join(random.choices(string.digits, k=6))
+        
+        # Store verification code in database
+        verification_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user.id,
+            "phone": phone,
+            "verification_code": verification_code,
+            "created_at": datetime.utcnow(),
+            "expires_at": datetime.utcnow() + timedelta(hours=1),
+            "verified": False
+        }
+        
+        await db.phone_verifications.insert_one(verification_data)
+        
+        # Send verification SMS (simulated)
+        success = await send_verification_sms(phone, verification_code)
+        
+        return {
+            "success": success,
+            "message": "Verification SMS sent successfully" if success else "Failed to send verification SMS"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send phone verification: {str(e)}")
+
+@api_router.post("/verify-phone")
+async def verify_phone_generic(request: dict, user: User = Depends(require_auth)):
+    """Verify phone number with verification code"""
+    try:
+        verification_code = request.get("verification_code")
+        if not verification_code:
+            raise HTTPException(status_code=400, detail="Verification code is required")
+        
+        # Find verification record
+        verification = await db.phone_verifications.find_one({
+            "user_id": user.id,
+            "verification_code": verification_code,
+            "verified": False,
+            "expires_at": {"$gt": datetime.utcnow()}
+        })
+        
+        if not verification:
+            raise HTTPException(status_code=400, detail="Invalid or expired verification code")
+        
+        # Mark as verified
+        await db.phone_verifications.update_one(
+            {"_id": verification["_id"]},
+            {
+                "$set": {
+                    "verified": True,
+                    "verified_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        # Update user record
+        await db.users.update_one(
+            {"id": user.id},
+            {
+                "$set": {
+                    "phone_verified": True,
+                    "phone_verified_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        return {
+            "success": True,
+            "message": "Phone number verified successfully"
+        }
+        
+    except HTTPException:  
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Phone verification failed: {str(e)}")
+
+# ============================================================================
 # SMART PUSH NOTIFICATIONS & REAL-TIME BUSINESS DASHBOARD
 # ============================================================================
 
