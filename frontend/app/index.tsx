@@ -724,7 +724,7 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingHorizontal: 20,
     paddingBottom: 24,
-    backgroundColor: '#007AFF', // Modern blue header
+    backgroundColor: '#06325c', // Custom dark navy blue header
     borderBottomWidth: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
