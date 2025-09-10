@@ -770,10 +770,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   tagline: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
+    fontSize: 14, // Increased from 12
+    color: '#fff', // Changed to bright white for better visibility on dark navy header
+    fontWeight: '600', // Increased from 500 to make it bolder
     marginTop: 2,
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   userSection: {
     flexDirection: 'row',
