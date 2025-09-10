@@ -1777,6 +1777,12 @@ async def initialize_subscription_plans(user: User = Depends(require_admin_auth)
 async def get_subscription_plans():
     """Get all available subscription plans"""
     plans = await db.subscription_plans.find().to_list(100)
+    
+    # Convert ObjectId to string for JSON serialization
+    for plan in plans:
+        if '_id' in plan:
+            plan['_id'] = str(plan['_id'])
+    
     return plans
 
 @api_router.get("/business/subscription/status")
