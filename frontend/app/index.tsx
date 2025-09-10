@@ -1106,6 +1106,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 24,
     marginTop: 16,
+    borderTopWidth: 2,
+    borderTopColor: '#3a3a3c',
   },
   footerTitle: {
     fontSize: 16,
