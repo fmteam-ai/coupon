@@ -645,15 +645,15 @@ export default function HomePage() {
         </View>
 
         {/* Footer Links */}
-        <View style={styles.footerSection}>
-          <Text style={styles.footerTitle}>Legal & Support</Text>
+        <View style={[styles.footerSection, { backgroundColor: '#2c2c2e' }]}>
+          <Text style={[styles.footerTitle, { color: '#fff' }]}>Legal & Support</Text>
           <View style={styles.footerLinks}>
             <TouchableOpacity
               style={styles.footerLink}
               onPress={() => router.push('/privacy-policy')}
             >
               <Ionicons name="shield-checkmark-outline" size={16} color="#fff" />
-              <Text style={styles.footerLinkText}>Privacy Policy</Text>
+              <Text style={[styles.footerLinkText, { color: '#fff' }]}>Privacy Policy</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
@@ -661,7 +661,7 @@ export default function HomePage() {
               onPress={() => router.push('/terms-of-use')}
             >
               <Ionicons name="document-text-outline" size={16} color="#fff" />
-              <Text style={styles.footerLinkText}>Terms of Use</Text>
+              <Text style={[styles.footerLinkText, { color: '#fff' }]}>Terms of Use</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
@@ -669,11 +669,11 @@ export default function HomePage() {
               onPress={() => router.push('/business-terms')}
             >
               <Ionicons name="briefcase-outline" size={16} color="#fff" />
-              <Text style={styles.footerLinkText}>Business Terms</Text>
+              <Text style={[styles.footerLinkText, { color: '#fff' }]}>Business Terms</Text>
             </TouchableOpacity>
           </View>
           
-          <Text style={styles.footerCopyright}>
+          <Text style={[styles.footerCopyright, { color: '#fff' }]}>
             © 2025 DealWiz. All rights reserved.
           </Text>
         </View>
