@@ -560,8 +560,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    // Modern gradient background (fallback solid color for now)
-    backgroundColor: '#007AFF',
+    // Custom dark navy blue header
+    backgroundColor: '#06325c',
     borderBottomWidth: 0,
     // Add subtle shadow
     shadowColor: '#000',
