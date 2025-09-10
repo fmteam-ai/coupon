@@ -524,6 +524,16 @@ export default function BusinessRegisterPage() {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* Dark themed footer section */}
+      <View style={styles.footerSection}>
+        <View style={styles.footerContent}>
+          <Text style={styles.footerText}>
+            By registering your business, you agree to our Terms of Service and Privacy Policy. 
+            Your business will be reviewed by our team before approval.
+          </Text>
+        </View>
+      </View>
+
       <MapLocationPicker
         visible={showMapModal}
         onClose={() => setShowMapModal(false)}
