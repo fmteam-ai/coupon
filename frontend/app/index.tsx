@@ -741,7 +741,7 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#fff', // White text on blue background
   },
   logoContainer: {
     alignItems: 'center',
