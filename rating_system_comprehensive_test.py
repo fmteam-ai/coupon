@@ -19,7 +19,7 @@ load_dotenv('/app/frontend/.env')
 load_dotenv('/app/backend/.env')
 
 # Get backend URL from environment
-BACKEND_URL = os.getenv('EXPO_PUBLIC_BACKEND_URL', 'https://dealwiz-maps.preview.emergentagent.com')
+BACKEND_URL = os.getenv('EXPO_PUBLIC_BACKEND_URL', 'https://dealwiz-backend-fix--2denlr8a.preview.emergentagent.com')
 API_BASE = f"{BACKEND_URL}/api"
 
 class ComprehensiveRatingTester:

@@ -123,9 +123,16 @@ class BusinessRegistration(BaseModel):
     phone: str
     address: str
     city: str
-    country: str
+    state: str = ""
+    zip_code: str = ""
+    postalCode: Optional[str] = None  # Accept postalCode from frontend
+    country: str = "US"
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    # Precise location from map picker
+    precise_latitude: Optional[float] = None
+    precise_longitude: Optional[float] = None
+    location_verified_by_map: bool = False
 
 class EmailVerification(BaseModel):
     email: EmailStr
@@ -548,6 +555,7 @@ async def check_and_award_badges(user_id: str):
                 badge_reward = UserReward(
                     user_id=user_id,
                     reward_type="badge",
+                    reward_value=0,
                     reward_data={"badge_id": badge_id},
                     source="achievement"
                 )
@@ -806,7 +814,12 @@ async def get_current_user(request: Request, credentials: HTTPAuthorizationCrede
     if not session_token:
         return None
     session = await db.user_sessions.find_one({"session_token": session_token})
-    if not session or datetime.fromisoformat(session["expires_at"]) < datetime.utcnow():
+    if not session:
+        return None
+    expires_at = session["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at < datetime.utcnow():
         return None
     user = await db.users.find_one({"id": session["user_id"]})
     if not user:
@@ -821,7 +834,7 @@ async def require_auth(user: User = Depends(get_current_user)) -> User:
     return user
 
 async def require_business_auth(user: User = Depends(require_auth)) -> User:
-    if user.user_type not in ["business", "admin"]:
+    if user.user_type not in ["business", "business_owner", "admin"]:
         raise HTTPException(status_code=403, detail="Business access required")
     return user
 
@@ -833,18 +846,22 @@ async def require_admin_auth(user: User = Depends(require_auth)) -> User:
 # Alias for compatibility
 require_admin = require_admin_auth
 
+def _as_dt(value):
+    """Accept datetime or ISO string (Mongo stores datetimes natively)"""
+    return datetime.fromisoformat(value) if isinstance(value, str) else value
+
 async def check_business_subscription(business_id: str) -> bool:
     subscription = await db.business_subscriptions.find_one({"business_id": business_id})
     if not subscription:
         return False
     now = datetime.utcnow()
     if subscription["status"] == "trial":
-        trial_end = datetime.fromisoformat(subscription["trial_end"])
+        trial_end = _as_dt(subscription["trial_end"])
         if now <= trial_end:
             return True
     if subscription["status"] == "active":
         if subscription.get("current_period_end"):
-            period_end = datetime.fromisoformat(subscription["current_period_end"])
+            period_end = _as_dt(subscription["current_period_end"])
             if now <= period_end:
                 return True
     return False
@@ -1293,7 +1310,7 @@ async def redeem_coupon(discount_id: str, redemption: CouponRedemption, user: Us
     discount = await db.discounts.find_one({"id": discount_id, "is_active": True})
     if not discount:
         raise HTTPException(status_code=404, detail="Discount not found or inactive")
-    if datetime.fromisoformat(discount["expires_at"]) < datetime.utcnow():
+    if _as_dt(discount["expires_at"]) < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Discount has expired")
     if discount["qr_code"] != redemption.qr_code:
         raise HTTPException(status_code=400, detail="Invalid QR code")
@@ -1411,8 +1428,14 @@ async def register_business(business_data: BusinessRegistration, user: User = De
         # Check trial eligibility first
         eligibility = await check_previous_business_existence(business_data.dict(), user.email)
         
+        # Handle postalCode -> zip_code mapping
+        business_dict = business_data.dict()
+        if business_dict.get("postalCode") and not business_dict.get("zip_code"):
+            business_dict["zip_code"] = business_dict["postalCode"]
+        business_dict.pop("postalCode", None)  # Remove postalCode after mapping
+        
         business = Business(
-            **business_data.dict(),
+            **business_dict,
             owner_id=user.id,
             is_approved=False,  # Requires admin approval
             trial_eligible=eligibility["trial_eligible"]
@@ -1473,7 +1496,8 @@ async def register_business(business_data: BusinessRegistration, user: User = De
             "verification_email_sent": True,
             "upgrade_required": not eligibility["trial_eligible"]
         }
-        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Business registration failed: {str(e)}")
 
@@ -1800,7 +1824,7 @@ async def get_business_subscription_status(user: User = Depends(require_auth)):
         raise HTTPException(status_code=404, detail="No subscription found")
     
     # Get current plan details
-    plan = await db.subscription_plans.find_one({"id": subscription.get("plan_id", "free")})
+    plan = await db.subscription_plans.find_one({"id": subscription.get("plan_id", "free")}, {"_id": 0})
     
     # Calculate trial/subscription info
     now = datetime.utcnow()
@@ -1815,7 +1839,7 @@ async def get_business_subscription_status(user: User = Depends(require_auth)):
     }
     
     if subscription["status"] == "trial":
-        trial_end = datetime.fromisoformat(subscription["trial_end"])
+        trial_end = _as_dt(subscription["trial_end"])
         days_remaining = max(0, (trial_end - now).days)
         status_info.update({
             "trial_active": True,
@@ -1825,7 +1849,7 @@ async def get_business_subscription_status(user: User = Depends(require_auth)):
         })
     elif subscription["status"] == "active":
         if subscription.get("current_period_end"):
-            period_end = datetime.fromisoformat(subscription["current_period_end"])
+            period_end = _as_dt(subscription["current_period_end"])
             days_until_renewal = max(0, (period_end - now).days)
             status_info.update({
                 "trial_active": False,
@@ -2332,8 +2356,25 @@ async def register_business_account(business_data: BusinessRegistrationAuth):
         # Check if owner email already exists
         existing_user = await db.users.find_one({"email": business_data.owner_email})
         if existing_user:
-            # Use existing user account
+            # SECURITY: If user exists with a password, this is NOT allowed without verification
+            # Only allow if this is a Google user (no password) or we can verify their identity
+            if existing_user.get("password_hash"):
+                # User already has an account with password - they should login instead
+                raise HTTPException(
+                    status_code=400, 
+                    detail="An account with this email already exists. Please use the business login instead."
+                )
+            # For Google users without password, we can set one for business access
             owner_user_id = existing_user["id"]
+            hashed_password = bcrypt.hashpw(business_data.password.encode('utf-8'), bcrypt.gensalt())
+            # Don't override user_type if they're admin - preserve their role
+            update_data = {"password_hash": hashed_password.decode('utf-8')}
+            if existing_user.get("user_type") not in ["admin", "system_admin"]:
+                update_data["user_type"] = "business_owner"
+            await db.users.update_one(
+                {"id": owner_user_id},
+                {"$set": update_data}
+            )
         else:
             # Create new business owner user account
             hashed_password = bcrypt.hashpw(business_data.password.encode('utf-8'), bcrypt.gensalt())
@@ -2392,12 +2433,15 @@ async def register_business_account(business_data: BusinessRegistrationAuth):
         )
         await db.business_subscriptions.insert_one(trial_subscription.dict())
         
-        # Generate access token for business owner
-        access_token = jwt.encode(
-            {"user_id": owner_user_id, "email": business_data.owner_email, "user_type": "business_owner"},
-            JWT_SECRET,
-            algorithm="HS256"
+        # Create session token instead of JWT
+        session_token = str(uuid.uuid4())
+        expires_at = datetime.utcnow() + timedelta(days=7)
+        session = UserSession(
+            user_id=owner_user_id,
+            session_token=session_token,
+            expires_at=expires_at
         )
+        await db.user_sessions.insert_one(session.dict())
         
         return {
             "success": True,
@@ -2408,10 +2452,9 @@ async def register_business_account(business_data: BusinessRegistrationAuth):
             "trial_days": trial_days,
             "subscription_status": subscription_status,
             "requires_admin_approval": True,
-            "access_token": access_token,
+            "session_token": session_token,
             "token_type": "bearer"
         }
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -2431,6 +2474,10 @@ async def login_business_account(login_data: BusinessLoginAuth):
         if not owner_user:
             raise HTTPException(status_code=401, detail="Business owner account not found")
         
+        # Check if password_hash exists (handle Google users or users without passwords)
+        if not owner_user.get("password_hash"):
+            raise HTTPException(status_code=401, detail="Invalid login credentials - please register with a password first")
+        
         # Verify password
         if not bcrypt.checkpw(login_data.password.encode('utf-8'), owner_user["password_hash"].encode('utf-8')):
             raise HTTPException(status_code=401, detail="Invalid password")
@@ -2442,12 +2489,15 @@ async def login_business_account(login_data: BusinessLoginAuth):
                 detail=f"Business account is suspended. Reason: {business.get('suspension_reason', 'Policy violation')}"
             )
         
-        # Generate access token
-        access_token = jwt.encode(
-            {"user_id": owner_user["id"], "email": owner_user["email"], "user_type": "business_owner"},
-            JWT_SECRET,
-            algorithm="HS256"
+        # Create session token instead of JWT
+        session_token = str(uuid.uuid4())
+        expires_at = datetime.utcnow() + timedelta(days=7)
+        session = UserSession(
+            user_id=owner_user["id"],
+            session_token=session_token,
+            expires_at=expires_at
         )
+        await db.user_sessions.insert_one(session.dict())
         
         # Get subscription status
         subscription = await db.business_subscriptions.find_one({"business_id": business["id"]})
@@ -2459,10 +2509,9 @@ async def login_business_account(login_data: BusinessLoginAuth):
             "business_name": business["name"],
             "is_approved": business["is_approved"],
             "subscription_status": subscription["status"] if subscription else "no_subscription",
-            "access_token": access_token,
+            "session_token": session_token,
             "token_type": "bearer"
         }
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -2615,13 +2664,18 @@ async def get_business_verification_status(user: User = Depends(require_auth)):
 # MISSING VERIFICATION ENDPOINTS
 # ============================================================================
 
-@api_router.post("/send-email-verification")
-async def send_email_verification_generic(request: dict, user: User = Depends(require_auth)):
+@api_router.post("/auth/send-email-verification")
+async def send_email_verification_generic(request: Request, user: User = Depends(require_auth)):
     """Send email verification code to user"""
     try:
-        email = request.get("email")
-        if not email:
-            raise HTTPException(status_code=400, detail="Email is required")
+        # Accept either JSON body or default to user's email
+        body = {}
+        try:
+            body = await request.json()
+        except:
+            pass  # No body is fine, we'll use user's email
+            
+        email = body.get("email") or user.email
         
         # Generate 6-digit verification code
         verification_code = ''.join(random.choices(string.digits, k=6))
@@ -2652,11 +2706,13 @@ async def send_email_verification_generic(request: dict, user: User = Depends(re
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send email verification: {str(e)}")
 
-@api_router.post("/verify-email")
-async def verify_email_generic(request: dict, user: User = Depends(require_auth)):
+@api_router.post("/auth/verify-email")
+async def verify_email_generic(request: Request, user: User = Depends(require_auth)):
     """Verify email address with verification code"""
     try:
-        verification_code = request.get("verification_code")
+        body = await request.json()
+        # Accept both 'code' and 'verification_code' from frontend
+        verification_code = body.get("code") or body.get("verification_code")
         if not verification_code:
             raise HTTPException(status_code=400, detail="Verification code is required")
         
@@ -2682,12 +2738,12 @@ async def verify_email_generic(request: dict, user: User = Depends(require_auth)
             }
         )
         
-        # Update user record
+        # Update user record with correct field name
         await db.users.update_one(
             {"id": user.id},
             {
                 "$set": {
-                    "email_verified": True,
+                    "is_email_verified": True,
                     "email_verified_at": datetime.utcnow()
                 }
             }
@@ -2697,17 +2753,23 @@ async def verify_email_generic(request: dict, user: User = Depends(require_auth)
             "success": True,
             "message": "Email verified successfully"
         }
-        
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Email verification failed: {str(e)}")
 
-@api_router.post("/send-phone-verification")
-async def send_phone_verification_generic(request: dict, user: User = Depends(require_auth)):
+@api_router.post("/auth/send-phone-verification")
+async def send_phone_verification_generic(request: Request, user: User = Depends(require_auth)):
     """Send phone verification code to user"""
     try:
-        phone = request.get("phone")
+        # Accept phone from body, query params, or use user's phone
+        body = {}
+        try:
+            body = await request.json()
+        except:
+            pass
+            
+        phone = body.get("phone") or request.query_params.get("phone") or user.phone
         if not phone:
             raise HTTPException(status_code=400, detail="Phone number is required")
         
@@ -2734,17 +2796,18 @@ async def send_phone_verification_generic(request: dict, user: User = Depends(re
             "success": success,
             "message": "Verification SMS sent successfully" if success else "Failed to send verification SMS"
         }
-        
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send phone verification: {str(e)}")
 
-@api_router.post("/verify-phone")
-async def verify_phone_generic(request: dict, user: User = Depends(require_auth)):
+@api_router.post("/auth/verify-phone")
+async def verify_phone_generic(request: Request, user: User = Depends(require_auth)):
     """Verify phone number with verification code"""
     try:
-        verification_code = request.get("verification_code")
+        body = await request.json()
+        # Accept both 'code' and 'verification_code' from frontend
+        verification_code = body.get("code") or body.get("verification_code")
         if not verification_code:
             raise HTTPException(status_code=400, detail="Verification code is required")
         
@@ -2770,12 +2833,12 @@ async def verify_phone_generic(request: dict, user: User = Depends(require_auth)
             }
         )
         
-        # Update user record
+        # Update user record with correct field name
         await db.users.update_one(
             {"id": user.id},
             {
                 "$set": {
-                    "phone_verified": True,
+                    "is_phone_verified": True,
                     "phone_verified_at": datetime.utcnow()
                 }
             }
@@ -2785,8 +2848,10 @@ async def verify_phone_generic(request: dict, user: User = Depends(require_auth)
             "success": True,
             "message": "Phone number verified successfully"
         }
-        
-    except HTTPException:  
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Phone verification failed: {str(e)}")  
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Phone verification failed: {str(e)}")
@@ -3867,7 +3932,7 @@ async def join_group_deal(group_deal_id: str, user: User = Depends(require_auth)
         if not group_deal["is_active"]:
             raise HTTPException(status_code=400, detail="Group deal is no longer active")
         
-        if datetime.fromisoformat(group_deal["expires_at"]) < datetime.utcnow():
+        if _as_dt(group_deal["expires_at"]) < datetime.utcnow():
             raise HTTPException(status_code=400, detail="Group deal has expired")
         
         # Check if already joined
@@ -4045,15 +4110,10 @@ async def create_business_with_90_day_trial(business: Business, user_email: str)
 
 from voice_ai import voice_assistant
 
-@api_router.post("/api/voice/process")
-async def process_voice_command(request: Request):
+@api_router.post("/voice/process")
+async def process_voice_command(request: Request, user: User = Depends(require_auth)):
     """Process voice command with AI assistant"""
     data = await request.json()
-    
-    # Get user from session
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
     
     voice_text = data.get("voice_text", "")
     location = data.get("location")  # {latitude: float, longitude: float}
@@ -4063,38 +4123,32 @@ async def process_voice_command(request: Request):
     
     try:
         result = await voice_assistant.process_voice_command(
-            user_id=user["id"],
+            user_id=user.id,
             voice_text=voice_text,
             location=location
         )
         
         return result
-        
+    except HTTPException:
+        raise    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Voice processing error: {str(e)}")
 
-@api_router.get("/api/voice/suggestions")
-async def get_voice_suggestions(request: Request):
+@api_router.get("/voice/suggestions")
+async def get_voice_suggestions(user: User = Depends(require_auth)):
     """Get personalized voice command suggestions"""
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
     try:
-        suggestions = await voice_assistant.get_personalized_suggestions(user["id"])
+        suggestions = await voice_assistant.get_personalized_suggestions(user.id)
         return suggestions
-        
+    except HTTPException:
+        raise    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting suggestions: {str(e)}")
 
-@api_router.post("/api/voice/feedback")
-async def voice_feedback(request: Request):
+@api_router.post("/voice/feedback")
+async def voice_feedback(request: Request, user: User = Depends(require_auth)):
     """Store user feedback on voice interactions"""
     data = await request.json()
-    
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
     
     interaction_id = data.get("interaction_id")
     rating = data.get("rating")  # 1-5 stars
@@ -4103,17 +4157,18 @@ async def voice_feedback(request: Request):
     try:
         # Store feedback in database
         feedback_doc = {
-            "user_id": user["id"],
+            "user_id": user.id,
             "interaction_id": interaction_id,
             "rating": rating,
             "feedback": feedback,
             "timestamp": datetime.now()
         }
         
-        db.voice_feedback.insert_one(feedback_doc)
+        await db.voice_feedback.insert_one(feedback_doc)
         
         return {"success": True, "message": "Feedback stored successfully"}
-        
+    except HTTPException:
+        raise    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error storing feedback: {str(e)}")
 
@@ -4123,14 +4178,10 @@ async def voice_feedback(request: Request):
 
 from personalization_engine import personalization_engine
 
-@api_router.post("/api/personalization/track")
-async def track_user_behavior(request: Request):
+@api_router.post("/personalization/track")
+async def track_user_behavior(request: Request, user: User = Depends(require_auth)):
     """Track user behavior for personalization"""
     data = await request.json()
-    
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
     
     action = data.get("action")  # view, share, redeem, rate, search, voice_query
     behavior_data = data.get("data", {})
@@ -4139,18 +4190,16 @@ async def track_user_behavior(request: Request):
         raise HTTPException(status_code=400, detail="Action is required")
     
     try:
-        await personalization_engine.track_user_behavior(user["id"], action, behavior_data)
+        await personalization_engine.track_user_behavior(user.id, action, behavior_data)
         return {"success": True, "message": "Behavior tracked successfully"}
-        
+    except HTTPException:
+        raise    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error tracking behavior: {str(e)}")
 
-@api_router.get("/api/personalization/recommendations")
-async def get_personalized_recommendations(request: Request):
+@api_router.get("/personalization/recommendations")
+async def get_personalized_recommendations(request: Request, user: User = Depends(require_auth)):
     """Get personalized deal recommendations"""
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
     
     # Get query parameters
     limit = int(request.query_params.get("limit", 10))
@@ -4166,7 +4215,7 @@ async def get_personalized_recommendations(request: Request):
     
     try:
         recommendations = await personalization_engine.get_personalized_recommendations(
-            user_id=user["id"],
+            user_id=user.id,
             context=context,
             limit=limit
         )
@@ -4177,22 +4226,20 @@ async def get_personalized_recommendations(request: Request):
             "count": len(recommendations),
             "personalized": True
         }
-        
+    except HTTPException:
+        raise    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting recommendations: {str(e)}")
 
-@api_router.get("/api/personalization/predictions")
-async def get_predictive_recommendations(request: Request):
+@api_router.get("/personalization/predictions")
+async def get_predictive_recommendations(request: Request, user: User = Depends(require_auth)):
     """Get predictive recommendations based on user patterns"""
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
     
     prediction_context = request.query_params.get("context", "next_hour")
     
     try:
         predictions = await personalization_engine.get_predictive_recommendations(
-            user_id=user["id"],
+            user_id=user.id,
             prediction_context=prediction_context
         )
         
@@ -4202,20 +4249,18 @@ async def get_predictive_recommendations(request: Request):
             "count": len(predictions),
             "context": prediction_context
         }
-        
+    except HTTPException:
+        raise    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting predictions: {str(e)}")
 
-@api_router.get("/api/personalization/insights")
-async def get_user_insights(request: Request):
+@api_router.get("/personalization/insights")
+async def get_user_insights(request: Request, user: User = Depends(require_auth)):
     """Get user behavior insights and preferences"""
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
     
     try:
         # Get user profile
-        profile = db.user_profiles.find_one({"user_id": user["id"]})
+        profile = await db.user_profiles.find_one({"user_id": user.id})
         
         if not profile:
             return {
@@ -5070,6 +5115,8 @@ async def refresh_access_token(request: TokenRefreshRequest):
         
         return result
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Token refresh error: {str(e)}")
 

@@ -1,0 +1,50 @@
+{
+  "summary": "Backend only. Ran 85 pytest tests with real authenticated calls (users and sessions seeded in Mongo for customer, business and admin roles): 73 passed (85.9%). Also re-ran the old /app/backend_test.py: 94/95 passed. Those old tests mostly only checked that endpoints return 401 without auth, which is why they missed the bugs below. I FIXED 2 bugs in server.py: (1) the token refresh endpoint returned 500 instead of 401; (2) get_current_user crashed with a TypeError (500) when a session's expires_at was stored as a datetime, which is what the Google OAuth /auth/session endpoint writes, so every real Google-login user got 500 on every protected endpoint. Still broken and reported: POST /api/businesses/register (the endpoint the frontend registration form uses) ALWAYS returns 500; the JWT from business login/register is rejected by every protected endpoint; the frontend calls /api/auth/* verification routes and /api/voice/* routes that return 404; 9 endpoints return 500 where they should return 4xx. MOCKED: POST /api/create-payment-intent does NOT call Stripe (it builds fake pi_ ids locally), and verification emails are only printed to stdout and never sent. Deprecated packages: not checked (backend only).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/businesses/register", "issue": "Always returns 500. Business(**BusinessRegistration.dict()) fails validation because BusinessRegistration (server.py:118) has no state or zip_code fields, but Business (server.py:231) requires both. The frontend form (app/business-register.tsx:219) also sends 'postalCode', not 'zip_code', and sends NO Authorization header, so it would get 401 anyway. Business registration from the app is completely broken.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/business/auth/login + /api/business/auth/register (JWT)", "issue": "Both return a JWT access_token, which the frontend stores as 'auth_token' (business-auth-login.tsx:47). But require_auth/get_current_user only accepts session_tokens from db.user_sessions, so the JWT gets 401 on every business endpoint (verification-status, realtime-metrics, verify-email, resend-verification, subscription). The JWT also carries user_type 'business_owner', which require_business_auth rejects (it only allows 'business' or 'admin'). Fix: create a user_sessions record and return a session_token, or make get_current_user accept the JWT.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/business/auth/login", "issue": "Returns 500 \"Business login failed: 'password_hash'\" when the owner email belongs to an existing user with no password (e.g. a Google user). /business/auth/register reuses that user without setting a password_hash, so this business can never log in.", "priority": "HIGH"},
+      {"endpoint": "/api/auth/send-email-verification, /api/auth/verify-email, /api/auth/send-phone-verification, /api/auth/verify-phone", "issue": "The frontend calls these paths but they return 404. The backend registers them without the /auth prefix (/api/send-email-verification, /api/verify-email, /api/send-phone-verification, /api/verify-phone).", "priority": "HIGH"},
+      {"endpoint": "/api/voice/*, /api/personalization/*", "issue": "Routes are declared with an extra 'api/' (@api_router.get('/api/voice/suggestions')), so they live at /api/api/voice/... and the frontend's /api/voice/process and /api/voice/suggestions return 404. At /api/api/... they return 500 for Bearer auth because get_current_user(request) is called directly and credentials is a Depends object (AttributeError: 'Depends' object has no attribute 'credentials'). There are 7 such calls.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/cv/analytics/receipt-insights", "issue": "500: list(db.receipt_scans.find()) used on a Motor cursor (server.py ~4675). Use await ...to_list()."},
+      {"endpoint": "GET /api/pricing/demand-prediction/{id}, /api/pricing/analytics/{id}, /api/mobile/device/status/{id}, /api/mobile/security/attestation/{id}, GET /api/cv/ar-businesses (invalid coordinates)", "issue": "Return 500 where they should return 403/404/400: a broad 'except Exception' catches the HTTPException. A static scan found the same pattern in about 40 endpoints (suspend/unsuspend, MFA, social, GDPR, etc.). Add 'except HTTPException: raise' before 'except Exception'."},
+      {"endpoint": "POST /api/admin/business/unsuspend", "issue": "Takes business_id as a query param while suspend takes a JSON body. Inconsistent."},
+      {"endpoint": "POST /api/auth/logout", "issue": "Defined twice (server.py:905 and ~5080). The second one (which revokes the refresh token) is dead code."},
+      {"endpoint": "POST /api/create-payment-intent", "issue": "MOCKED: no real Stripe call (stripe.PaymentIntent.create is never used). The client_secret is fake and will fail in Stripe's SDK."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [
+    {"flow": "Business registration", "issue": "business-register.tsx calls /api/businesses/register without an auth header and sends postalCode, not zip_code. The backend returns 401 without auth and 500 with it.", "affected_testIDs": []},
+    {"flow": "Business login to dashboard", "issue": "The stored JWT auth_token is rejected (401) by all session-based business endpoints.", "affected_testIDs": []},
+    {"flow": "User email/phone verification, Voice assistant", "issue": "Frontend paths /api/auth/* and /api/voice/* return 404.", "affected_testIDs": []}
+  ], "design_issues": [], "react_native_issues": []},
+  "test_report_links": ["/app/backend/tests/conftest.py", "/app/backend/tests/test_dealwiz_core_api.py", "/app/backend/tests/test_endpoint_sweep.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Fix POST /api/businesses/register: add state, zip_code (and/or accept postalCode), precise_latitude, precise_longitude and location_verified_by_map to BusinessRegistration, or default them in Business. Add the 'except HTTPException: raise' handler there too.",
+    "Frontend business-register.tsx: send the Authorization Bearer session_token and map postalCode to zip_code, or switch to /api/business/auth/register.",
+    "Unify auth: /business/auth/login and /business/auth/register must issue a session_token (insert into db.user_sessions), or get_current_user must accept the JWT. Also align user_type 'business_owner' with require_business_auth.",
+    "/business/auth/register with an existing owner user: set password_hash if it is missing. Make login handle a missing password_hash with 401, not 500.",
+    "Route mismatch: expose /api/auth/send-email-verification, /api/auth/verify-email, /api/auth/send-phone-verification and /api/auth/verify-phone, or change the frontend paths.",
+    "Remove the extra '/api' prefix on the voice and personalization routes. Use Depends(require_auth) instead of get_current_user(request).",
+    "Add 'except HTTPException: raise' to the ~40 endpoints that turn 4xx into 500.",
+    "Fix receipt-insights to use the async Motor to_list.",
+    "Replace the simulated create-payment-intent with a real stripe.PaymentIntent.create, using the STRIPE_SECRET_KEY from env.",
+    "Move the hardcoded Emergent LLM key (server.py:58) to the EMERGENT_LLM_KEY env var. JWT_SECRET has different hardcoded defaults in server.py and auth_security.py; set it in .env."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 6200 lines; split it into routers/modules.",
+    "auth_security.py and mobile_security.py use sync pymongo inside async endpoints, which blocks the event loop.",
+    "The email sender is a print-only stub (MOCKED).",
+    "No refresh-token issuing endpoint exists (generate_token_pair is never called from the API), so /auth/token/refresh can't be used by clients."
+  ],
+  "updated_files": ["/app/backend/server.py (get_current_user now handles a datetime expires_at; /auth/token/refresh re-raises HTTPException so an invalid token returns 401)", "/app/backend/tests/*"],
+  "success_rate": {"backend": "85.9% (73/85) after 2 fixes; legacy backend_test.py 94/95", "frontend": "not tested"},
+  "seed_data_creation": "Test users (test_*@example.com) and sessions are inserted directly into Mongo by conftest.py and deleted afterwards; TEST_ businesses are cleaned up too. /app/memory/test_credentials.md is MISSING.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: set -a; . /app/backend/.env; set +a; export EXPO_PUBLIC_BACKEND_URL=$(grep EXPO_PUBLIC_BACKEND_URL /app/frontend/.env | cut -d= -f2); pytest /app/backend/tests -q. Auth = session_token in db.user_sessions (Bearer). /app/comprehensive_backend_test.py uses stale paths (/api/subscription/plans etc.) and its 404 failures are test bugs, not backend bugs.",
+  "rca_of_issue": "Token refresh 500: the 401 HTTPException raised inside the try was caught by 'except Exception' and re-raised as 500 (fixed). Google-session 500: datetime.fromisoformat() was called on a BSON datetime (fixed). Business register 500: the request model is missing the fields the Business model requires."
+}
