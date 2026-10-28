@@ -9,13 +9,16 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  Switch
+  Switch,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useGlobalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import VoiceAssistant from '../components/VoiceAssistant';
+import { useTranslation } from '../contexts/LanguageContext';
 
 const EXPO_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -42,6 +45,7 @@ interface Discount {
 }
 
 export default function HomePage() {
+  const t = useTranslation();
   const [user, setUser] = useState<any>(null);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
@@ -50,6 +54,8 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [categories, setCategories] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [showVoiceAssistant, setShowVoiceAssistant] = useState(false);
+  const [voiceDeals, setVoiceDeals] = useState<any[]>([]);
   const { session_id } = useGlobalSearchParams();
 
   const categories_list = [
@@ -151,26 +157,112 @@ export default function HomePage() {
     }
   };
 
+
+  const handleVoiceDealsFound = (deals: any[]) => {
+    setVoiceDeals(deals);
+    setShowVoiceAssistant(false);
+    // Optionally show a success message
+    Alert.alert(
+      '🎤 Voice Search Complete',
+      `Found ${deals.length} deals matching your request!`,
+      [{ text: 'OK' }]
+    );
+  };
+
   const handleLogin = () => {
-    const redirectUrl = encodeURIComponent(window.location.origin + '/profile');
-    const authUrl = `https://auth.emergentagent.com/?redirect=${redirectUrl}`;
-    window.open(authUrl, '_self');
+    const authUrl = `https://demobackend.emergentagent.com/auth/v1/env/oauth?_redirect_uri=${encodeURIComponent('https://dealwiz-backend-fix--2denlr8a.preview.emergentagent.com/')}`;
+    router.push(authUrl as any);
   };
 
   const handleLogout = async () => {
     try {
-      const token = await AsyncStorage.getItem('session_token');
       await fetch(`${EXPO_BACKEND_URL}/api/auth/logout`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
-      
-      await AsyncStorage.removeItem('session_token');
       setUser(null);
+      await AsyncStorage.removeItem('session_token');
     } catch (error) {
       console.error('Logout error:', error);
+    }
+  };
+
+  const handleShareDeal = async (discountId: string, businessName: string, dealTitle: string) => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to share deals with friends');
+      return;
+    }
+
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      const response = await fetch(`${EXPO_BACKEND_URL}/api/social/share-deal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          discount_id: discountId,
+          share_type: 'link',
+          share_platform: 'mobile_app'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        Alert.alert(
+          'Deal Shared! 🎉',
+          `You earned ${result.points_earned} points! Share this deal with friends to earn bonus points when they use it.`,
+          [
+            { text: 'Copy Link', onPress: () => copyShareLink(result.share_link) },
+            { text: 'Done' }
+          ]
+        );
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to share deal');
+    }
+  };
+
+  const copyShareLink = async (shareLink: string) => {
+    // For now, just show the link in an alert since React Native doesn't have built-in clipboard
+    Alert.alert('Share Link', shareLink, [
+      { text: 'OK' }
+    ]);
+  };
+
+  const handleViewSocialProof = async (discountId: string) => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to see social activity');
+      return;
+    }
+
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      const response = await fetch(`${EXPO_BACKEND_URL}/api/social/deal-popularity/${discountId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const popularity = await response.json();
+        const friendsUsed = popularity.friends_who_used;
+        const recentUsage = popularity.recent_usage_count;
+        
+        let message = `${recentUsage} people used this deal recently`;
+        if (friendsUsed.length > 0) {
+          const friendNames = friendsUsed.slice(0, 3).map((f: any) => f.name).join(', ');
+          message += `\n\nYour friends who used this:\n${friendNames}`;
+          if (friendsUsed.length > 3) {
+            message += ` and ${friendsUsed.length - 3} others`;
+          }
+        }
+
+        Alert.alert('Social Proof 👥', message);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load social proof');
     }
   };
 
@@ -221,7 +313,13 @@ export default function HomePage() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.logo}>CouponApp</Text>
+          <View style={styles.logoContainer}>
+            <View style={styles.logoIcon}>
+              <Text style={styles.logoSymbol}>💎</Text>
+            </View>
+            <Text style={styles.appName}>DealWiz</Text>
+            <Text style={styles.tagline}>Smart Savings</Text>
+          </View>
           {user ? (
             <View style={styles.userSection}>
               <Text style={styles.userName}>Hi, {user.name}!</Text>
@@ -324,10 +422,73 @@ export default function HomePage() {
                 <Text style={styles.expiryText}>
                   Expires: {new Date(item.discount.expires_at).toLocaleDateString()}
                 </Text>
+                
+                {/* Social Actions */}
+                <View style={styles.socialActions}>
+                  <TouchableOpacity 
+                    style={styles.socialButton}
+                    onPress={() => handleShareDeal(item.discount.id, item.business.name, item.discount.title)}
+                  >
+                    <Ionicons name="share-outline" size={16} color="#007AFF" />
+                    <Text style={styles.socialButtonText}>Share</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.socialButton}
+                    onPress={() => handleViewSocialProof(item.discount.id)}
+                  >
+                    <Ionicons name="people-outline" size={16} color="#34C759" />
+                    <Text style={styles.socialButtonText}>Who Used</Text>
+                  </TouchableOpacity>
+                </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
+
+        {/* Voice Search Results */}
+        {voiceDeals.length > 0 && (
+          <View style={styles.voiceResultsContainer}>
+            <View style={styles.voiceResultsHeader}>
+              <Ionicons name="mic" size={20} color="#007AFF" />
+              <Text style={styles.voiceResultsTitle}>Voice Search Results</Text>
+              <TouchableOpacity onPress={() => setVoiceDeals([])}>
+                <Ionicons name="close" size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.voiceResultsScroll}
+            >
+              {voiceDeals.map((item, index) => (
+                <TouchableOpacity
+                  key={`voice-${item.id}-${index}`}
+                  style={styles.voiceResultCard}
+                  onPress={() => router.push(`/business/${item.business?.id || 'unknown'}`)}
+                >
+                  <View style={styles.voiceResultHeader}>
+                    <Text style={styles.voiceResultTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.voiceResultValue}>
+                      {item.discount_type === 'percentage' 
+                        ? `${item.discount_value}% OFF`
+                        : `$${item.discount_value} OFF`
+                      }
+                    </Text>
+                  </View>
+                  <Text style={styles.voiceResultBusiness} numberOfLines={1}>
+                    {item.business?.name}
+                  </Text>
+                  <Text style={styles.voiceResultDescription} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Businesses */}
         <View style={styles.section}>
@@ -375,17 +536,63 @@ export default function HomePage() {
           ))}
         </View>
 
+        {/* NEW FEATURES - Top Priority Access */}
+        {user && (
+          <View style={styles.newFeaturesSection}>
+            <Text style={styles.newFeaturesTitle}>🚀 New Features</Text>
+            <View style={styles.featuresGrid}>
+              <TouchableOpacity
+                style={styles.featureCard}
+                onPress={() => router.push('/ai-recommendations')}
+              >
+                <View style={styles.featureIconContainer}>
+                  <Ionicons name="sparkles" size={28} color="#007AFF" />
+                </View>
+                <Text style={styles.featureTitle}>AI Picks</Text>
+                <Text style={styles.featureDescription}>Personalized deals just for you</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.featureCard}
+                onPress={() => router.push('/rewards')}
+              >
+                <View style={styles.featureIconContainer}>
+                  <Ionicons name="trophy" size={28} color="#FF6B35" />
+                </View>
+                <Text style={styles.featureTitle}>Rewards</Text>
+                <Text style={styles.featureDescription}>Earn points & badges</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.featuresGrid}>
+              <TouchableOpacity
+                style={styles.featureCard}
+                onPress={() => router.push('/cashback-wallet')}
+              >
+                <View style={styles.featureIconContainer}>
+                  <Ionicons name="wallet" size={28} color="#34C759" />
+                </View>
+                <Text style={styles.featureTitle}>Cashback</Text>
+                <Text style={styles.featureDescription}>Real money back</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.featureCard}
+                onPress={() => router.push('/qr-scanner')}
+              >
+                <View style={styles.featureIconContainer}>
+                  <Ionicons name="qr-code" size={28} color="#5856D6" />
+                </View>
+                <Text style={styles.featureTitle}>QR Scanner</Text>
+                <Text style={styles.featureDescription}>Scan to redeem</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Action Buttons */}
         {user && (
           <View style={styles.actionSection}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => router.push('/qr-scanner')}
-            >
-              <Ionicons name="qr-code-outline" size={24} color="#007AFF" />
-              <Text style={styles.actionButtonText}>Scan QR Code</Text>
-            </TouchableOpacity>
-            
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => router.push('/business-register')}
@@ -395,7 +602,105 @@ export default function HomePage() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Business Owner Section */}
+        <View style={styles.businessSection}>
+          <Text style={styles.businessTitle}>🏢 For Business Owners</Text>
+          <Text style={styles.businessSubtitle}>
+            Join thousands of businesses growing their customer base
+          </Text>
+          
+          <View style={styles.businessActions}>
+            <TouchableOpacity
+              style={styles.businessButton}
+              onPress={() => router.push('/business-auth-register')}
+            >
+              <Ionicons name="add-circle-outline" size={20} color="#fff" />
+              <Text style={styles.businessButtonText}>Register Your Business</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.businessSecondaryButton}
+              onPress={() => router.push('/business-auth-login')}
+            >
+              <Ionicons name="log-in-outline" size={20} color="#007AFF" />
+              <Text style={styles.businessSecondaryButtonText}>Business Login</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.businessFeatures}>
+            <View style={styles.businessFeature}>
+              <Ionicons name="time-outline" size={16} color="#34C759" />
+              <Text style={styles.businessFeatureText}>90-day free trial</Text>
+            </View>
+            <View style={styles.businessFeature}>
+              <Ionicons name="people-outline" size={16} color="#34C759" />
+              <Text style={styles.businessFeatureText}>Reach more customers</Text>
+            </View>
+            <View style={styles.businessFeature}>
+              <Ionicons name="analytics-outline" size={16} color="#34C759" />
+              <Text style={styles.businessFeatureText}>Advanced analytics</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Footer Links */}
+        <View style={[styles.footerSection, { backgroundColor: '#2c2c2e', marginBottom: 80 }]}>
+          <Text style={[styles.footerTitle, { color: '#fff' }]}>Legal & Support</Text>
+          <View style={styles.footerLinks}>
+            <TouchableOpacity
+              style={styles.footerLink}
+              onPress={() => router.push('/privacy-policy')}
+            >
+              <Ionicons name="shield-checkmark-outline" size={16} color="#fff" />
+              <Text style={[styles.footerLinkText, { color: '#fff' }]}>Privacy Policy</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.footerLink}
+              onPress={() => router.push('/terms-of-use')}
+            >
+              <Ionicons name="document-text-outline" size={16} color="#fff" />
+              <Text style={[styles.footerLinkText, { color: '#fff' }]}>Terms of Use</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.footerLink}
+              onPress={() => router.push('/business-terms')}
+            >
+              <Ionicons name="briefcase-outline" size={16} color="#fff" />
+              <Text style={[styles.footerLinkText, { color: '#fff' }]}>Business Terms</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <Text style={[styles.footerCopyright, { color: '#fff' }]}>
+            © 2025 DealWiz. All rights reserved.
+          </Text>
+        </View>
       </ScrollView>
+
+      {/* Floating Voice Assistant Button */}
+      <TouchableOpacity
+        style={styles.floatingVoiceButton}
+        onPress={() => setShowVoiceAssistant(true)}
+      >
+        <VoiceAssistant compact={true} onDealFound={handleVoiceDealsFound} />
+      </TouchableOpacity>
+
+      {/* Voice Assistant Modal */}
+      <Modal
+        visible={showVoiceAssistant}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowVoiceAssistant(false)}
+      >
+        <SafeAreaView style={styles.voiceModal}>
+          <VoiceAssistant
+            onDealFound={handleVoiceDealsFound}
+            onClose={() => setShowVoiceAssistant(false)}
+          />
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -403,7 +708,7 @@ export default function HomePage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f8f9fb',
   },
   loadingContainer: {
     flex: 1,
@@ -416,11 +721,16 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   header: {
-    backgroundColor: '#fff',
+    paddingTop: 50,
     paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e1e1',
+    paddingBottom: 24,
+    backgroundColor: '#06325c', // Custom dark navy blue header
+    borderBottomWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   headerTop: {
     flexDirection: 'row',
@@ -431,7 +741,43 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 24,
     fontWeight: 'bold',
+    color: '#fff', // White text on blue background
+  },
+  logoContainer: {
+    alignItems: 'center',
+  },
+  logoIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f0f8ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  logoSymbol: {
+    fontSize: 24,
+  },
+  appName: {
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#007AFF',
+    letterSpacing: 0.5,
+  },
+  tagline: {
+    fontSize: 14, // Increased from 12
+    color: '#fff', // Changed to bright white for better visibility on dark navy header
+    fontWeight: '600', // Increased from 500 to make it bolder
+    marginTop: 2,
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   userSection: {
     flexDirection: 'row',
@@ -448,30 +794,46 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   loginText: {
-    color: '#fff',
+    color: '#ffffff',
+    fontSize: 14,
     fontWeight: '600',
+    letterSpacing: 0.3,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    backgroundColor: '#f8f9fb',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#e8ecf0',
   },
   searchIcon: {
     marginRight: 12,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
     fontSize: 16,
     color: '#333',
+    marginLeft: 12,
+    fontWeight: '500',
   },
   mapToggleButton: {
     flexDirection: 'row',
@@ -492,22 +854,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   categoryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
-    marginRight: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#e8ecf0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   categoryButtonActive: {
     backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.2,
   },
   categoryText: {
     fontSize: 14,
     color: '#666',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   categoryTextActive: {
-    color: '#fff',
+    color: '#ffffff',
+    fontWeight: '600',
   },
   content: {
     flex: 1,
@@ -523,9 +896,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 20,
+    color: '#1a1a1a',
+    letterSpacing: 0.3,
+    lineHeight: 30,
   },
   viewOnMapButton: {
     flexDirection: 'row',
@@ -542,17 +918,22 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   discountCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
     marginHorizontal: 8,
     marginLeft: 20,
-    width: 280,
+    width: 300,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#f0f2f5',
   },
   discountHeader: {
     marginBottom: 12,
@@ -602,16 +983,21 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   businessCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 20,
     marginHorizontal: 20,
-    marginBottom: 12,
+    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#f2f4f7',
   },
   businessContent: {
     flexDirection: 'row',
@@ -649,21 +1035,323 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   actionButton: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: '#007AFF',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   actionButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  newFeaturesSection: {
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  newFeaturesTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
+  },
+  featuresGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  featureCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  featureIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  featureTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  featureDescription: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  footerSection: {
+    backgroundColor: '#2c2c2e', // Dark theme background
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    marginTop: 16,
+    borderTopWidth: 2,
+    borderTopColor: '#3a3a3c',
+  },
+  footerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff', // White text on dark background
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  footerLinks: {
+    flexDirection: 'column',
+    gap: 12,
+    marginBottom: 20,
+  },
+  footerLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  footerLinkText: {
+    fontSize: 14,
+    color: '#fff', // White text on dark background
+    marginLeft: 8,
+    opacity: 0.8,
+  },
+  footerCopyright: {
+    fontSize: 12,
+    color: '#fff', // White text on dark background
+    textAlign: 'center',
+    fontStyle: 'italic',
+    opacity: 0.6,
+  },
+  businessSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginVertical: 16,
+    padding: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  businessTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  businessSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  businessActions: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  businessButton: {
+    backgroundColor: '#007AFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  businessButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  businessSecondaryButton: {
+    backgroundColor: '#f8f9fa',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    gap: 8,
+  },
+  businessSecondaryButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  businessFeatures: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  businessFeature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  businessFeatureText: {
+    fontSize: 12,
+    color: '#34C759',
+    fontWeight: '500',
+  },
+  socialActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  socialButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  socialActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  socialButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  voiceResultsContainer: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginBottom: 24,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  voiceResultsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  voiceResultsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+    marginLeft: 8,
+  },
+  voiceResultsScroll: {
+    marginHorizontal: -16,
+  },
+  voiceResultCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 8,
+    marginLeft: 16,
+    width: 280,
+    borderWidth: 1,
+    borderColor: '#e1e1e1',
+  },
+  voiceResultHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  voiceResultTitle: {
     fontSize: 14,
     fontWeight: '600',
+    color: '#333',
+    flex: 1,
+    marginRight: 8,
+  },
+  voiceResultValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
     color: '#007AFF',
-    marginTop: 8,
+  },
+  voiceResultBusiness: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  voiceResultDescription: {
+    fontSize: 12,
+    color: '#666',
+    lineHeight: 16,
+  },
+  floatingVoiceButton: {
+    position: 'absolute',
+    bottom: 100, // Above bottom tab bar
+    right: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 12,
+    borderWidth: 3,
+    borderColor: '#ffffff',
+  },
+  voiceModal: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    paddingTop: 20,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,11 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  Modal,
+  TextInput,
+  Switch,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -17,75 +21,135 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const EXPO_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
-interface SubscriptionStatus {
-  status: string;
-  trial_end?: string;
-  trial_active?: boolean;
-  days_remaining?: number;
-  current_period_end?: string;
+interface SubscriptionPlan {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  features: string[];
+  max_coupons: number;
+  ai_recommendations: boolean;
+  geofencing: boolean;
+  advanced_analytics: boolean;
 }
 
-interface Analytics {
+interface SubscriptionStatus {
+  subscription_id: string;
+  business_id: string;
   business_name: string;
-  total_discounts: number;
-  active_discounts: number;
-  total_redemptions: number;
-  recent_redemptions: Array<{
-    discount_title: string;
-    user_name: string;
-    used_at: string;
-    verification_status: string;
-  }>;
-  monthly_trends: Array<{
-    month: string;
-    redemptions: number;
-  }>;
+  plan: SubscriptionPlan;
+  status: string;
+  trial_active?: boolean;
+  trial_end?: string;
+  days_remaining?: number;
+  trial_expired?: boolean;
+  current_period_end?: string;
+  days_until_renewal?: number;
+  stripe_subscription_id?: string;
+}
+
+interface UsageAnalytics {
+  business_name: string;
+  current_plan: SubscriptionPlan;
+  coupons_created: number;
+  coupons_redeemed: number;
+  total_customers: number;
+  conversion_rate: number;
+  last_period_growth: number;
+  monthly_cost: number;
+  analytics_period: string;
+  metrics: {
+    total_discounts: number;
+    active_discounts: number;
+    recent_customer_engagement: number;
+    estimated_customer_value: number;
+    estimated_roi: number;
+    business_rating: number;
+    total_reviews: number;
+  };
+  recommendations: string[];
 }
 
 export default function BusinessDashboardPage() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [usageAnalytics, setUsageAnalytics] = useState<UsageAnalytics | null>(null);
+  const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
+  const [upgrading, setUpgrading] = useState(false);
+
+  // New state for real-time features
+  const [realTimeMetrics, setRealTimeMetrics] = useState<RealTimeMetrics>({
+    activeDeals: 0,
+    todayRedemptions: 0,
+    nearbyCustomers: 0,
+    liveViews: 0,
+    revenueToday: 0,
+    averageRating: 0,
+    lastUpdate: new Date().toISOString(),
+  });
+  const [quickDealModalVisible, setQuickDealModalVisible] = useState(false);
+  const [quickDeal, setQuickDeal] = useState<QuickDeal>({
+    title: '',
+    description: '',
+    discount: 0,
+    validUntil: '',
+    active: true,
+  });
+  const [creatingDeal, setCreatingDeal] = useState(false);
+  const [realtimeInterval, setRealtimeInterval] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    loadDashboardData();
+    fetchData();
+    startRealtimeUpdates();
+    
+    return () => {
+      if (realtimeInterval) {
+        clearInterval(realtimeInterval);
+      }
+    };
   }, []);
 
-  const loadDashboardData = async () => {
+  const fetchData = async () => {
     try {
-      const token = await AsyncStorage.getItem('session_token');
+      const token = await AsyncStorage.getItem('auth_token');
       if (!token) {
-        router.push('/');
+        router.push('/login');
         return;
       }
 
-      // Load subscription status
-      const subscriptionResponse = await fetch(`${EXPO_BACKEND_URL}/api/subscription/status`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const [subscriptionResponse, analyticsResponse, plansResponse] = await Promise.all([
+        fetch(`${EXPO_BACKEND_URL}/api/business/subscription/status`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${EXPO_BACKEND_URL}/api/business/usage-analytics`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${EXPO_BACKEND_URL}/api/subscription-plans`)
+      ]);
 
       if (subscriptionResponse.ok) {
         const subscriptionData = await subscriptionResponse.json();
         setSubscriptionStatus(subscriptionData);
       }
 
-      // Load analytics
-      const analyticsResponse = await fetch(`${EXPO_BACKEND_URL}/api/business/analytics`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
       if (analyticsResponse.ok) {
         const analyticsData = await analyticsResponse.json();
-        setAnalytics(analyticsData);
+        setUsageAnalytics(analyticsData);
       }
 
+      if (plansResponse.ok) {
+        const plansData = await plansResponse.json();
+        setAvailablePlans(plansData);
+      }
+
+      // Fetch initial real-time metrics
+      await fetchRealTimeMetrics();
+
     } catch (error) {
-      console.error('Dashboard error:', error);
+      console.error('Error fetching data:', error);
       Alert.alert('Error', 'Failed to load dashboard data');
     } finally {
       setLoading(false);
@@ -93,14 +157,202 @@ export default function BusinessDashboardPage() {
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadDashboardData();
+  const fetchRealTimeMetrics = async () => {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch(`${EXPO_BACKEND_URL}/api/business/realtime-metrics`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const metrics = await response.json();
+        setRealTimeMetrics({
+          ...metrics,
+          lastUpdate: new Date().toISOString(),
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching real-time metrics:', error);
+    }
   };
 
-  const handleUpgradeSubscription = () => {
-    router.push('/subscription-plans');
+  const startRealtimeUpdates = () => {
+    const interval = setInterval(() => {
+      fetchRealTimeMetrics();
+    }, 30000); // Update every 30 seconds
+    
+    setRealtimeInterval(interval);
   };
+
+  const createQuickDeal = async () => {
+    if (!quickDeal.title || !quickDeal.description || quickDeal.discount <= 0) {
+      Alert.alert('Error', 'Please fill in all fields with valid values');
+      return;
+    }
+
+    setCreatingDeal(true);
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const dealData = {
+        ...quickDeal,
+        validUntil: quickDeal.validUntil || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Default 24 hours
+      };
+
+      const response = await fetch(`${EXPO_BACKEND_URL}/api/deals/quick-create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(dealData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        Alert.alert(
+          '🚀 Deal Created!',
+          `Your "${quickDeal.title}" deal is now live and customers nearby will be notified!`,
+          [
+            { text: 'Create Another', onPress: resetQuickDeal },
+            { text: 'Close', onPress: () => setQuickDealModalVisible(false) },
+          ]
+        );
+        
+        // Refresh metrics to show new deal
+        await fetchRealTimeMetrics();
+        
+        // Send notifications to nearby customers
+        await notifyNearbyCustomers(result.dealId);
+      } else {
+        const error = await response.json();
+        Alert.alert('Error', error.detail || 'Failed to create deal');
+      }
+    } catch (error) {
+      console.error('Error creating quick deal:', error);
+      Alert.alert('Error', 'Failed to create deal');
+    } finally {
+      setCreatingDeal(false);
+    }
+  };
+
+  const notifyNearbyCustomers = async (dealId: string) => {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) return;
+
+      await fetch(`${EXPO_BACKEND_URL}/api/notifications/deal-alert`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ dealId }),
+      });
+    } catch (error) {
+      console.error('Error sending notifications:', error);
+    }
+  };
+
+  const resetQuickDeal = () => {
+    setQuickDeal({
+      title: '',
+      description: '',
+      discount: 0,
+      validUntil: '',
+      active: true,
+    });
+  };
+
+  const handleUpgradeSubscription = async (planId: string) => {
+    if (!planId) return;
+    
+    setUpgrading(true);
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const response = await fetch(`${EXPO_BACKEND_URL}/api/business/subscription/upgrade`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ plan_id: planId })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        Alert.alert(
+          'Success!', 
+          `Successfully upgraded to ${result.plan.name}! Your new subscription is active immediately.`,
+          [{ text: 'OK', onPress: () => {
+            setUpgradeModalVisible(false);
+            fetchData(); // Refresh data
+          }}]
+        );
+      } else {
+        const error = await response.json();
+        Alert.alert('Upgrade Failed', error.detail || 'Failed to upgrade subscription');
+      }
+    } catch (error) {
+      console.error('Error upgrading subscription:', error);
+      Alert.alert('Error', 'Failed to upgrade subscription');
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    Alert.alert(
+      'Cancel Subscription',
+      'Are you sure you want to cancel your subscription? You will continue to have access until the end of your current billing period.',
+      [
+        { text: 'Keep Subscription', style: 'cancel' },
+        {
+          text: 'Cancel Subscription',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await AsyncStorage.getItem('auth_token');
+              if (!token) return;
+
+              const response = await fetch(`${EXPO_BACKEND_URL}/api/business/subscription/cancel`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` }
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                Alert.alert('Subscription Cancelled', result.message);
+                fetchData(); // Refresh data
+              } else {
+                const error = await response.json();
+                Alert.alert('Error', error.detail || 'Failed to cancel subscription');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to cancel subscription');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
+
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
@@ -157,9 +409,9 @@ export default function BusinessDashboardPage() {
         showsVerticalScrollIndicator={false}
       >
         {/* Business Name */}
-        {analytics && (
+        {usageAnalytics && (
           <View style={styles.businessHeader}>
-            <Text style={styles.businessName}>{analytics.business_name}</Text>
+            <Text style={styles.businessName}>{usageAnalytics.business_name}</Text>
           </View>
         )}
 
@@ -201,57 +453,45 @@ export default function BusinessDashboardPage() {
         )}
 
         {/* Analytics Overview */}
-        {analytics && (
+        {usageAnalytics && (
           <View style={styles.analyticsSection}>
             <Text style={styles.sectionTitle}>Overview</Text>
             
             <View style={styles.metricsGrid}>
               <View style={styles.metricCard}>
                 <Ionicons name="ticket-outline" size={24} color="#007AFF" />
-                <Text style={styles.metricValue}>{analytics.total_discounts}</Text>
+                <Text style={styles.metricValue}>{usageAnalytics.metrics.total_discounts}</Text>
                 <Text style={styles.metricLabel}>Total Coupons</Text>
               </View>
               
               <View style={styles.metricCard}>
                 <Ionicons name="checkmark-circle-outline" size={24} color="#34C759" />
-                <Text style={styles.metricValue}>{analytics.active_discounts}</Text>
+                <Text style={styles.metricValue}>{usageAnalytics.metrics.active_discounts}</Text>
                 <Text style={styles.metricLabel}>Active Coupons</Text>
               </View>
               
               <View style={styles.metricCard}>
                 <Ionicons name="people-outline" size={24} color="#FF9500" />
-                <Text style={styles.metricValue}>{analytics.total_redemptions}</Text>
-                <Text style={styles.metricLabel}>Total Redemptions</Text>
+                <Text style={styles.metricValue}>{usageAnalytics.metrics.recent_customer_engagement}</Text>
+                <Text style={styles.metricLabel}>Customer Engagement</Text>
               </View>
             </View>
           </View>
         )}
 
-        {/* Recent Activity */}
-        {analytics && analytics.recent_redemptions.length > 0 && (
+        {/* AI Recommendations */}
+        {usageAnalytics && usageAnalytics.recommendations.length > 0 && (
           <View style={styles.activitySection}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
+            <Text style={styles.sectionTitle}>AI Recommendations</Text>
             
-            {analytics.recent_redemptions.map((redemption, index) => (
+            {usageAnalytics.recommendations.map((recommendation, index) => (
               <View key={index} style={styles.activityItem}>
                 <View style={styles.activityIcon}>
-                  <Ionicons name="gift-outline" size={20} color="#007AFF" />
+                  <Ionicons name="bulb-outline" size={20} color="#007AFF" />
                 </View>
                 <View style={styles.activityDetails}>
-                  <Text style={styles.activityTitle}>{redemption.discount_title}</Text>
-                  <Text style={styles.activityUser}>Redeemed by {redemption.user_name}</Text>
-                  <Text style={styles.activityTime}>{formatDate(redemption.used_at)}</Text>
-                </View>
-                <View style={[
-                  styles.statusBadge,
-                  redemption.verification_status === 'verified' ? styles.verifiedBadge : styles.pendingBadge
-                ]}>
-                  <Text style={[
-                    styles.statusBadgeText,
-                    redemption.verification_status === 'verified' ? styles.verifiedText : styles.pendingText
-                  ]}>
-                    {redemption.verification_status}
-                  </Text>
+                  <Text style={styles.activityTitle}>Recommendation {index + 1}</Text>
+                  <Text style={styles.activityUser}>{recommendation}</Text>
                 </View>
               </View>
             ))}
@@ -300,6 +540,34 @@ export default function BusinessDashboardPage() {
             <Text style={styles.actionTitle}>Verify Business</Text>
             <Text style={styles.actionDescription}>Complete phone and email verification</Text>
             <Ionicons name="chevron-forward" size={20} color="#999" />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => router.push('/business-subscription')}
+          >
+            <Ionicons name="card-outline" size={24} color="#007AFF" />
+            <Text style={styles.actionTitle}>Subscription Management</Text>
+            <Text style={styles.actionDescription}>Upgrade plan and manage billing</Text>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Danger Zone */}
+        <View style={styles.dangerSection}>
+          <Text style={styles.dangerTitle}>⚠️ Danger Zone</Text>
+          <TouchableOpacity 
+            style={styles.dangerCard}
+            onPress={() => router.push('/business-delete')}
+          >
+            <Ionicons name="trash-outline" size={24} color="#FF3B30" />
+            <View style={styles.dangerContent}>
+              <Text style={styles.dangerActionTitle}>Delete Business Profile</Text>
+              <Text style={styles.dangerActionDescription}>
+                Permanently delete your business. You'll lose trial eligibility if you register again.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FF3B30" />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -564,5 +832,49 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 16,
     flex: 2,
+  },
+  dangerSection: {
+    backgroundColor: '#fff',
+    margin: 16,
+    padding: 20,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF3B30',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dangerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF3B30',
+    marginBottom: 16,
+  },
+  dangerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff5f5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  dangerContent: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  dangerActionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF3B30',
+  },
+  dangerActionDescription: {
+    fontSize: 14,
+    color: '#dc2626',
+    marginTop: 2,
+    lineHeight: 18,
   },
 });

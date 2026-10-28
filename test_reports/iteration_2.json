@@ -1,0 +1,61 @@
+{
+  "summary": "Backend only. ON ARRIVAL THE BACKEND WAS DOWN (502 on every route): IndentationError at server.py:4121 (a stray 'raise HTTPException' left in voice_feedback). I fixed it, then ran 118 pytest tests (the 85 old ones + 33 new in test_iteration2_fixes.py): 107 passed (90.7%). Verified working: POST /api/businesses/register with state/zip_code/postalCode (postalCode is mapped to zip_code and persisted); business/auth/login and register return a session_token that works on /auth/me and the business endpoints; login with a missing password_hash returns 401; the /api/auth/* verification routes exist; /api/voice/* and /api/personalization/* return 200 and /api/api/* is gone. I also FIXED: BSON-datetime fromisoformat crashes (they broke POST /discounts, coupon redeem, GET /business/subscription/status and group deals) and the UserReward missing reward_value (first redeem returned 500). Still broken: business_owner user_type is rejected by require_business_auth, so business-auth businesses can't create discounts; account takeover through /business/auth/register; verification endpoints don't match the frontend contract; verify flag fields are wrong; the frontend still reads access_token; 5 endpoints still swallow HTTPException into 500. MOCKED: emails are print-only and create-payment-intent is a local stub.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "server.py (whole app)", "issue": "FIXED BY T1: IndentationError at line 4121 in /voice/feedback (left over from removing get_current_user). Uvicorn could not import server.py, so the backend was down and returned 502. Removed the stray line.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/business/auth/register (SECURITY)", "issue": "Account takeover. If owner_email belongs to an existing user, the endpoint reuses that account without checking the password and returns a valid session_token for it. Verified: registering with the victim's email and the attacker's password gives a session whose /auth/me is the victim. For passwordless (Google) users it also sets the attacker's password. It also overwrites user_type to 'business_owner', so an existing admin or customer silently changes role. Fix: if the user exists and has a password_hash, require bcrypt.checkpw; never set a password on a passwordless/Google account without verification; don't downgrade user_type.", "priority": "CRITICAL"},
+      {"endpoint": "require_business_auth (POST /api/discounts, /business/advanced-analytics, /business/customer-insights, /pricing/*)", "issue": "Users created via /business/auth/register get user_type 'business_owner', but require_business_auth (server.py:835) only allows ['business','admin']. Every business registered through the dedicated business flow gets 403 'Business access required' and can never create discounts. Fix: add 'business_owner' to the allowed list, or create the user as 'business'.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/discounts, POST /api/discounts/{id}/redeem, GET /api/business/subscription/status, group-deal join", "issue": "FIXED BY T1: datetime.fromisoformat() was called on Mongo-native datetimes (trial_end, current_period_end, expires_at) and raised a TypeError (500). Added an _as_dt() helper. Also excluded _id from the plan in subscription/status. Discount create and redeem now pass.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/discounts/{id}/redeem", "issue": "FIXED BY T1: check_and_award_badges built UserReward without the required reward_value field. A redemption that earned a badge returned 500 after the coupon_usage row was already inserted (partial write). Added reward_value=0.", "priority": "HIGH"},
+      {"endpoint": "/api/auth/send-email-verification, /api/auth/verify-email, /api/auth/send-phone-verification, /api/auth/verify-phone", "issue": "The routes now exist and work with the backend's own contract. They are still unusable from the frontend (verification.tsx): send-email-verification is sent with NO body and returns 422 (the backend requires a dict body with email; it should default to user.email). send-phone-verification sends phone as a QUERY param and returns 422. verify-email and verify-phone send {code}, but the backend reads 'verification_code' and returns 400 'Verification code is required'.", "priority": "HIGH"},
+      {"endpoint": "POST /api/auth/verify-email, /api/auth/verify-phone", "issue": "They set users.email_verified / phone_verified, but the User model and /auth/me use is_email_verified / is_phone_verified. Verification never shows up in /auth/me (verified: false after a successful verify).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/pricing/demand-prediction/{id}, /pricing/analytics/{id}, /mobile/device/status/{id}, /mobile/security/attestation/{id}", "issue": "Still return 500 wrapping a 403/404 (e.g. 'Demand prediction error: 403: Access denied'). Add 'except HTTPException: raise'."},
+      {"endpoint": "GET /api/cv/analytics/receipt-insights", "issue": "Still 500: list() used on an AsyncIOMotorCursor. Use await cursor.to_list(None)."},
+      {"endpoint": "voice_ai.py / personalization_engine.py", "issue": "Use sync pymongo MongoClient (blocks the event loop) and a hardcoded db name 'coupon_app' (self.client.coupon_app) instead of os.environ['DB_NAME']."},
+      {"endpoint": "GET /api/personalization/insights, POST /api/voice/feedback", "issue": "FIXED BY T1: missing await on Motor calls (find_one returned a coroutine, so insights would crash once a profile existed; insert_one was never awaited, so feedback was not stored)."},
+      {"endpoint": "POST /api/create-payment-intent", "issue": "Still MOCKED: no stripe.PaymentIntent.create call."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Business login/register", "issue": "business-auth-login.tsx:47 and business-auth-register.tsx:197 still store result.access_token, which is now undefined (the backend returns session_token). They also store it under 'auth_token', while business-mobile-dashboard.tsx and the other screens read 'session_token'. Business users are not authenticated after login.", "affected_testIDs": []},
+      {"flow": "Business registration form", "issue": "business-register.tsx:219 calls /api/businesses/register with NO Authorization header, so it gets 401 (the endpoint requires auth).", "affected_testIDs": []},
+      {"flow": "Email/phone verification", "issue": "The request body/params in verification.tsx don't match the backend (see backend_issues).", "affected_testIDs": []}
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration2_fixes.py", "/app/backend/tests/test_dealwiz_core_api.py", "/app/backend/tests/test_endpoint_sweep.py", "/app/backend/tests/conftest.py", "/app/test_reports/pytest/pytest_results_iter2.xml"],
+  "action_items": [
+    "SECURITY: /business/auth/register must verify the password of an existing owner_email account (bcrypt.checkpw) before issuing a session. Don't attach a password to Google accounts or change an existing user's user_type.",
+    "Allow user_type 'business_owner' in require_business_auth (server.py:835), or register owners as 'business'. Currently business-auth users get 403 on POST /discounts.",
+    "Verification endpoints: default email to user.email when there is no body; accept phone from the query string or body; accept 'code' as an alias of 'verification_code'. Use Optional Body models instead of 'request: dict'.",
+    "verify-email/verify-phone: set is_email_verified / is_phone_verified (the User model's field names).",
+    "Frontend business-auth-login.tsx and business-auth-register.tsx: store result.session_token under the 'session_token' key.",
+    "Frontend business-register.tsx: send Authorization: Bearer <session_token>.",
+    "Add 'except HTTPException: raise' to pricing/demand-prediction, pricing/analytics, mobile/device/status, mobile/security/attestation (and the other ~40 similar handlers).",
+    "Fix receipt-insights to use the async to_list. Switch voice_ai.py and personalization_engine.py to Motor and DB_NAME from env.",
+    "Run the server.py syntax check (python -m py_compile) after edits: the last change took the whole backend down."
+  ],
+  "critical_code_review_comments": [
+    "server.py is about 6200 lines; split it into routers.",
+    "The hardcoded Emergent LLM key at server.py:58 and the JWT_SECRET default should come from env.",
+    "Verification endpoints take 'request: dict' (unvalidated). Use Pydantic models.",
+    "Session tokens are a uuid4 inserted with no cleanup or limit. Every login creates a new session row."
+  ],
+  "updated_files": [
+    "/app/backend/server.py: removed the stray raise (IndentationError) in /voice/feedback; added await to voice_feedback.insert_one and user_profiles.find_one; added the _as_dt() helper replacing 6 fromisoformat calls on Mongo datetimes; excluded _id from the plan in /business/subscription/status; added reward_value=0 to the badge UserReward",
+    "/app/backend/tests/test_iteration2_fixes.py (new)",
+    "/app/backend/tests/test_dealwiz_core_api.py (session_token instead of access_token; passwordless-user login now expects 200)",
+    "/app/backend/tests/test_endpoint_sweep.py (voice/personalization paths without the duplicate /api)"
+  ],
+  "success_rate": {"backend": "90.7% (107/118) after T1 fixes; iteration-2 targeted fixes: the 5 requested fixes are verified, but 6 related gaps are found (security, role, contract)", "frontend": "not tested"},
+  "seed_data_creation": "test_* users and sessions are seeded directly in Mongo by conftest.py and cleaned up (users test_*, businesses TEST_*). /app/memory/test_credentials.md is still MISSING.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && set -a && . ./.env && set +a && export EXPO_PUBLIC_BACKEND_URL=$(grep EXPO_PUBLIC_BACKEND_URL /app/frontend/.env | cut -d= -f2) && python -m pytest tests -q. Auth = Bearer session_token from db.user_sessions. Note: /business/auth/register with the conftest 'owner' or 'customer' email flips their user_type to business_owner (a test-order side effect that reflects the real bug).",
+  "rca_of_issue": "Backend down: the main agent replaced the 'if not user:' guard in voice_feedback but left its indented 'raise' body, which is an IndentationError at import. Discount/subscription 500s: the models declare datetime fields, Motor stores them as BSON datetimes, and the code called datetime.fromisoformat on them. 403 for business-auth owners: user_type 'business_owner' is missing from the require_business_auth allow-list."
+}

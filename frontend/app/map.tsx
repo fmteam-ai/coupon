@@ -231,6 +231,78 @@ export default function MapPage() {
     return null;
   };
 
+  const handleShareDeal = async (discountId: string, businessName: string, dealTitle: string) => {
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      if (!token) {
+        Alert.alert('Login Required', 'Please login to share deals with friends');
+        return;
+      }
+
+      const response = await fetch(`${EXPO_BACKEND_URL}/api/social/share-deal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          discount_id: discountId,
+          share_type: 'link',
+          share_platform: 'mobile_app'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        Alert.alert(
+          'Deal Shared! 🎉',
+          `You earned ${result.points_earned} points! Share this deal with friends to earn bonus points when they use it.`,
+          [
+            { text: 'Copy Link', onPress: () => Alert.alert('Share Link', result.share_link) },
+            { text: 'Done' }
+          ]
+        );
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to share deal');
+    }
+  };
+
+  const handleViewSocialProof = async (discountId: string) => {
+    try {
+      const token = await AsyncStorage.getItem('session_token');
+      if (!token) {
+        Alert.alert('Login Required', 'Please login to see social activity');
+        return;
+      }
+
+      const response = await fetch(`${EXPO_BACKEND_URL}/api/social/deal-popularity/${discountId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const popularity = await response.json();
+        const friendsUsed = popularity.friends_who_used;
+        const recentUsage = popularity.recent_usage_count;
+        
+        let message = `${recentUsage} people used this deal recently`;
+        if (friendsUsed.length > 0) {
+          const friendNames = friendsUsed.slice(0, 3).map((f: any) => f.name).join(', ');
+          message += `\n\nYour friends who used this:\n${friendNames}`;
+          if (friendsUsed.length > 3) {
+            message += ` and ${friendsUsed.length - 3} others`;
+          }
+        }
+
+        Alert.alert('Social Proof 👥', message);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load social proof');
+    }
+  };
+
   if (locationPermission === null) {
     return (
       <SafeAreaView style={styles.container}>
@@ -383,6 +455,31 @@ export default function MapPage() {
                           <Text style={styles.expiryText}>
                             Expires: {new Date(item.discount.expires_at).toLocaleDateString()}
                           </Text>
+                          
+                          {/* Social Actions */}
+                          <View style={styles.socialActions}>
+                            <TouchableOpacity 
+                              style={styles.socialButton}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleShareDeal(item.discount.id, item.business.name, item.discount.title);
+                              }}
+                            >
+                              <Ionicons name="share-outline" size={14} color="#007AFF" />
+                              <Text style={styles.socialButtonText}>Share</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                              style={styles.socialButton}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleViewSocialProof(item.discount.id);
+                              }}
+                            >
+                              <Ionicons name="people-outline" size={14} color="#34C759" />
+                              <Text style={styles.socialButtonText}>Who Used</Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -797,5 +894,27 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  socialActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+  },
+  socialButtonText: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '500',
   },
 });
